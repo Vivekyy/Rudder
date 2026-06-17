@@ -9,8 +9,7 @@ but they can also make your work hard to see. You can spend hours prompting,
 reading, accepting, rejecting, rewriting, testing, and steering the tool without
 actually feeling like you truly produced the eventual code output.
 
-The goal is not to count tokens, surveil developers, or treat AI usage as a
-vanity metric. The goal is to give the person doing the work a truthful record
+The goal of rudder is to give the person doing the work a truthful record
 of their own AI-assisted coding process so they can understand their decisions,
 improve their workflow, and build better software.
 
