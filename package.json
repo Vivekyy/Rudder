@@ -1,17 +1,16 @@
 {
   "name": "@vivekyy/rudder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
   "type": "module",
   "bin": {
-    "rudder": "bin/rudder.ts"
+    "rudder": "dist/bin/rudder.js"
   },
   "engines": {
-    "node": ">=23.6.0"
+    "node": ">=20.0.0"
   },
   "files": [
-    "bin",
-    "src",
+    "dist",
     "README.md",
     "LICENSE"
   ],
@@ -41,8 +40,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "node --test",
-    "prepublishOnly": "npm run typecheck && npm test"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "shell-quote": "^1.8.1"

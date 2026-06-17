@@ -1,4 +1,5 @@
 node_modules/
+dist/
 digest.md
 *.rudder-bak
 .DS_Store
