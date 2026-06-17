@@ -83,12 +83,8 @@ Notes:
 - The git tag is created **after a successful publish**, so it is a marker, not the
   trigger. Do **not** push `v*` tags by hand — and never run `npm version patch` on
   `main` (it would bump a second time).
-- A tag pushed by `GITHUB_TOKEN` cannot trigger another workflow (GitHub's
-  anti-recursion rule), which is why publishing is orchestrated within one run
-  rather than via a tag-triggered workflow.
 - If a publish ever fails midway (e.g. a transient npm error), no tag is written;
   re-run `Publish to npm` from the Actions tab (`workflow_dispatch`) and it retries.
-- Trusted Publishing needs npm >= 11.5.1; the workflow upgrades npm before publishing.
 
 ## Installing / re-wiring hooks
 
