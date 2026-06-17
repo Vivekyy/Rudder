@@ -1,0 +1,30 @@
+{
+  "name": "rudder",
+  "version": "0.1.0",
+  "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
+  "type": "module",
+  "bin": {
+    "rudder": "bin/rudder.ts"
+  },
+  "engines": {
+    "node": ">=23.6.0"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "shell-quote": "^1.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/shell-quote": "^1.7.5",
+    "typescript": "^5.7.0"
+  },
+  "license": "MIT"
+}
