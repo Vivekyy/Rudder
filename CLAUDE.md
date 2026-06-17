@@ -8,9 +8,11 @@ Quick reference:
 - Bump the version in the same PR as a user-facing change
   (`npm version patch --no-git-tag-version`).
 - After opening a PR, use `/address-pr-comments` to triage review feedback.
-- **Publishing is tag-triggered.** After the version-bump PR merges to `main`,
-  push a matching `v*` tag (`git tag v<version> && git push --follow-tags`) to
-  fire `.github/workflows/publish.yml`, which publishes to npm via OIDC.
+- **Publishing is automatic on merge to `main`.** `.github/workflows/publish.yml`
+  runs on every push to `main`: if `package.json`'s version has no matching
+  `v<version>` tag yet, it publishes to npm via OIDC and then pushes the tag. Just
+  land the version bump — no manual tagging. (Forgetting to bump = no publish.)
+  Tests run separately in `.github/workflows/test.yml`.
 - Path-resolving code must work in both the `.ts` dev tree and the compiled
   `.js` under `dist/` — see the `rudderArgv()` note in AGENTS.md.
 
