@@ -1,5 +1,28 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+*.tsbuildinfo
+
+# Generated
 digest.md
 *.rudder-bak
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Test coverage
+coverage/
+
+# OS / editor
 .DS_Store
+*.swp
+.idea/
+.vscode/

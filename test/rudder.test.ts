@@ -36,6 +36,35 @@ test('insertPrompt stores and queries by local day; blanks are skipped', async (
   assert.equal(rows[0].project, 'archer');
 });
 
+test('rudderArgv points at a bin file that actually exists', async () => {
+  const { existsSync } = await import('node:fs');
+  const { rudderArgv } = await import('../src/install.ts');
+
+  const argv = rudderArgv(['hook', 'claude']);
+  assert.equal(argv[0], process.execPath);
+  assert.equal(argv[2], 'hook');
+  assert.equal(argv[3], 'claude');
+  // This test runs from the `.ts` source tree, so it only guards the dev path:
+  // the bin must resolve to a real file on disk. The published `.js` build is
+  // covered separately below, since it can't be exercised without a build.
+  assert.ok(existsSync(argv[1]), `rudder bin should exist at ${argv[1]}`);
+});
+
+test('rudderBinPath matches the bin extension to the loading module', async () => {
+  const { rudderBinPath } = await import('../src/install.ts');
+  const { pathToFileURL } = await import('node:url');
+  const { join } = await import('node:path');
+
+  // Dev `.ts` checkout: src/install.ts ↔ bin/rudder.ts.
+  const tsUrl = pathToFileURL(join('/repo', 'src', 'install.ts')).href;
+  assert.equal(rudderBinPath(tsUrl), join('/repo', 'bin', 'rudder.ts'));
+
+  // Published `.js` build: dist/src/install.js ↔ dist/bin/rudder.js — the path
+  // that had the original "hook points at a nonexistent file" bug.
+  const jsUrl = pathToFileURL(join('/repo', 'dist', 'src', 'install.js')).href;
+  assert.equal(rudderBinPath(jsUrl), join('/repo', 'dist', 'bin', 'rudder.js'));
+});
+
 test('claude hook parses stdin JSON into a row', async () => {
   const { promptsForDay, localDay } = await import('../src/db.ts');
   const { claudeHook } = await import('../src/hooks.ts');
