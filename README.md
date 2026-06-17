@@ -3,6 +3,17 @@
 **Rudder records the prompts you give your AI coding assistants and turns a day's
 worth of them into a readable summary of what you actually worked on.**
 
+Rudder is a tool for understanding what you actually do when you code with AI.
+AI coding tools make it easy to generate, edit, review, and ship code quickly,
+but they can also make your work hard to see. You can spend hours prompting,
+reading, accepting, rejecting, rewriting, testing, and steering the tool without
+actually feeling like you truly produced the eventual code output.
+
+The goal is not to count tokens, surveil developers, or treat AI usage as a
+vanity metric. The goal is to give the person doing the work a truthful record
+of their own AI-assisted coding process so they can understand their decisions,
+improve their workflow, and build better software.
+
 It installs lightweight hooks into **Claude Code** and **Codex** that quietly log
 every prompt you send to a local SQLite database. At the end of the day, run
 `rudder digest` and it asks your *existing* LLM session (the `claude` or `codex`
@@ -14,6 +25,19 @@ $ rudder digest
 rudder: 27 prompts on 2026-06-17; summarizing with claude...
 rudder: wrote ./digest.md
 ```
+
+## Why
+
+Rudder starts from a simple problem: When I code with AI, I feel like I haven't
+done anything except watch my agent code for me.
+
+The final diff tells only part of the story. It does not show how I got there,
+where I changed direction, what I trusted, what I rewrote, or what I tested.
+
+Rudder exists to make that path visible.
+
+The important question is not "Did AI write this?" It is "What did the human
+do?"
 
 ## How it works
 
@@ -93,8 +117,9 @@ rudder digest --date 2026-06-16        # a specific day
 rudder digest --agent codex --out ~/digests/today.md
 ```
 
-The digest groups your prompts by project and produces a Summary, a per-project
-breakdown, Highlights, and Open threads.
+The digest groups your prompts by project and produces a Summary; Architecting,
+Tuning, and Bugfixing breakdowns (each with the share of prompts and the top
+things you worked on); Highlights; and Open threads.
 
 ## Data & privacy
 
