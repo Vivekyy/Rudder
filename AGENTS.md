@@ -87,24 +87,8 @@ Notes:
   anti-recursion rule), which is why publishing is orchestrated within one run
   rather than via a tag-triggered workflow.
 - If a publish ever fails midway (e.g. a transient npm error), no tag is written;
-  re-run `Release` from the Actions tab (`workflow_dispatch`) and it retries.
-- Trusted Publishing needs npm >= 11.5.1; the worker upgrades npm before publishing.
-
-### Editing a published version (you can't — ship a new patch)
-
-npm versions are **immutable**: once `@vivekyy/rudder@x.y.z` is published you can
-never edit it or reuse that exact version number. To fix a bad release:
-
-- **Hotfix forward (the normal path):** bump a new patch version and let it publish.
-  This is almost always the right answer.
-- **Stop new installs of a bad version without unpublishing:** move the `latest`
-  dist-tag back to a known-good version —
-  `npm dist-tag add @vivekyy/rudder@<good> latest` — so `npm install` resolves to it
-  again, and/or `npm deprecate @vivekyy/rudder@<bad> "<reason>"` to warn installers.
-- **Unpublish** is a last resort: only allowed within **72 hours** of publishing and
-  only if no other package depends on it; after 72h you can only deprecate. Once a
-  version has been published you can never republish that same number, and
-  unpublishing an entire package blocks new versions for 24h.
+  re-run `Publish to npm` from the Actions tab (`workflow_dispatch`) and it retries.
+- Trusted Publishing needs npm >= 11.5.1; the workflow upgrades npm before publishing.
 
 ## Installing / re-wiring hooks
 
