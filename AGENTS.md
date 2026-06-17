@@ -36,11 +36,15 @@ capture (the hook fails and the fail-safe wrapper swallows the error).
 ## Pull request process
 
 1. Branch off `main` (never commit directly to `main`).
-2. Make the change; run `npm run typecheck` and `npm test`.
+2. Make the change; run the package checks via the `check-changed-folders` skill
+   (Codex equivalent of `/check`) — or directly: `npm run typecheck`, `npm test`,
+   `npm run build`.
 3. If the change is user-facing or fixes a bug, bump the version in the same PR:
    `npm version patch --no-git-tag-version` (use `--no-git-tag-version` so the
    tag is cut later from `main`, not from the feature branch).
 4. Commit, push, and open a PR with `gh pr create --base main`.
+5. After the PR opens, address any review comments with the `address-pr-comments`
+   skill (Codex equivalent of `/address-pr-comments`).
 
 ## Publishing to npm
 
@@ -78,3 +82,86 @@ Because each Conductor/git worktree is a separate checkout but `~/.claude/settin
 is global, a hook pointing into a specific worktree breaks once that worktree is
 deleted. Prefer a **global install** (`npm i -g @vivekyy/rudder`) so the hook
 points at a stable path (`/opt/homebrew/bin/rudder`) that survives worktree churn.
+
+## Skills
+
+### Available skills
+
+- check-changed-folders: Run typecheck/test/build for the package on the current
+  branch and enforce Claude/Codex sync. Use for `/check` requests and pre-PR
+  validation. (file: .codex/skills/check-changed-folders/SKILL.md)
+- address-pr-comments: Fetch open review comments on the current branch's PR,
+  dedupe them, and fix/decline/defer each with a written reason. Invoked
+  automatically by `check-changed-folders` when a PR exists. (file:
+  .codex/skills/address-pr-comments/SKILL.md)
+
+### Trigger rules
+
+- If the user asks to run checks/tests/lint for the branch or references `/check`,
+  use `check-changed-folders`.
+- If the user asks to address PR comments, fix Greptile findings, or references
+  `/address-pr-comments`, use `address-pr-comments`.
+
+## Gitmoji
+
+Use [gitmoji](https://gitmoji.dev/) in all commit messages and PR titles. Pick the
+most specific emoji that fits the change.
+
+Note: `:zap:` and `:sparkles:` are swapped from the standard guide (`:zap:` = new
+features, `:sparkles:` = performance).
+
+| Emoji | Code | Description |
+|-------|------|-------------|
+| 🎨 | `:art:` | Improve structure / format of the code |
+| ⚡️ | `:zap:` | Introduce new features |
+| 🔥 | `:fire:` | Remove code or files |
+| 🐛 | `:bug:` | Fix a bug |
+| 🚑️ | `:ambulance:` | Critical hotfix |
+| ✨ | `:sparkles:` | Improve performance |
+| 📝 | `:memo:` | Add or update documentation |
+| 🚀 | `:rocket:` | Deploy stuff |
+| ✅ | `:white_check_mark:` | Add, update, or pass tests |
+| 🔒️ | `:lock:` | Fix security or privacy issues |
+| 🔖 | `:bookmark:` | Release / Version tags |
+| 🚨 | `:rotating_light:` | Fix compiler / linter warnings |
+| 🚧 | `:construction:` | Work in progress |
+| 💚 | `:green_heart:` | Fix CI Build |
+| ⬆️ | `:arrow_up:` | Upgrade dependencies |
+| ⬇️ | `:arrow_down:` | Downgrade dependencies |
+| 📌 | `:pushpin:` | Pin dependencies to specific versions |
+| 👷 | `:construction_worker:` | Add or update CI build system |
+| ♻️ | `:recycle:` | Refactor code |
+| ➕ | `:heavy_plus_sign:` | Add a dependency |
+| ➖ | `:heavy_minus_sign:` | Remove a dependency |
+| 🔧 | `:wrench:` | Add or update configuration files |
+| ✏️ | `:pencil2:` | Fix typos |
+| ⏪️ | `:rewind:` | Revert changes |
+| 📦️ | `:package:` | Add or update compiled files or packages |
+| 🚚 | `:truck:` | Move or rename resources |
+| 💥 | `:boom:` | Introduce breaking changes |
+| 💡 | `:bulb:` | Add or update source code comments |
+| 🗃️ | `:card_file_box:` | Perform database related changes |
+| 🔊 | `:loud_sound:` | Add or update logs |
+| 🔇 | `:mute:` | Remove logs |
+| 🏷️ | `:label:` | Add or update types |
+| 🚩 | `:triangular_flag_on_post:` | Add, update, or remove feature flags |
+| 🥅 | `:goal_net:` | Catch errors |
+| 🗑️ | `:wastebasket:` | Deprecate code needing cleanup |
+| 🩹 | `:adhesive_bandage:` | Simple fix for non-critical issue |
+| ⚰️ | `:coffin:` | Remove dead code |
+| 🧪 | `:test_tube:` | Add a failing test |
+| 🦺 | `:safety_vest:` | Add or update validation code |
+| 🙈 | `:see_no_evil:` | Add or update a .gitignore file |
+
+(The full gitmoji set applies; this table lists the codes most common in this
+repo. See https://gitmoji.dev for the rest.)
+
+## Claude / Codex parity
+
+Keep Claude and Codex instructions synchronized. Any change to one side must be
+mirrored on the other in the same PR (the `check-changed-folders` skill enforces
+this as a gate):
+
+- `CLAUDE.md` <-> `AGENTS.md`
+- `.claude/commands/check.md` <-> `.codex/skills/check-changed-folders/SKILL.md`
+- `.claude/commands/address-pr-comments.md` <-> `.codex/skills/address-pr-comments/SKILL.md`
