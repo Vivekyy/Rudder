@@ -6,21 +6,28 @@ import { quote } from 'shell-quote';
 import { openDb, dbPath } from './db.ts';
 
 /**
+ * Resolve the rudder bin path for the module at `moduleUrl`, matching the bin's
+ * extension to however that module was loaded: a dev checkout runs the `.ts`
+ * sources directly (src/install.ts ↔ bin/rudder.ts), while a built/published
+ * install runs the compiled `.js` (dist/src/install.js ↔ dist/bin/rudder.js).
+ * Hardcoding `.ts` made `rudder init` write a hook pointing at a file that
+ * doesn't exist in the published package. Takes the URL as an argument so the
+ * `.js` branch is testable without an actual build.
+ */
+export function rudderBinPath(moduleUrl: string): string {
+  const here = fileURLToPath(moduleUrl);
+  const ext = here.endsWith('.ts') ? 'ts' : 'js';
+  return resolve(dirname(here), '..', 'bin', `rudder.${ext}`);
+}
+
+/**
  * The argv another tool should run to invoke a rudder hook. We point at the
  * absolute bin path with the current node binary so it works whether or not
  * `rudder` is on PATH (dev checkouts and global installs alike). Returned as an
  * array so callers never have to re-split a path that may contain spaces.
  */
 export function rudderArgv(sub: string[]): string[] {
-  // Match the bin's extension to however this module was loaded: a dev checkout
-  // runs the `.ts` sources directly (src/install.ts ↔ bin/rudder.ts), while a
-  // built/published install runs the compiled `.js` (dist/src/install.js ↔
-  // dist/bin/rudder.js). Hardcoding `.ts` made `rudder init` write a hook
-  // pointing at a file that doesn't exist in the published package.
-  const here = fileURLToPath(import.meta.url);
-  const ext = here.endsWith('.ts') ? 'ts' : 'js';
-  const binPath = resolve(dirname(here), '..', 'bin', `rudder.${ext}`);
-  return [process.execPath, binPath, ...sub];
+  return [process.execPath, rudderBinPath(import.meta.url), ...sub];
 }
 
 function backup(path: string): void {
