@@ -1,0 +1,4 @@
+node_modules/
+digest.md
+*.rudder-bak
+.DS_Store
