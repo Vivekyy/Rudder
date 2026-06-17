@@ -1,5 +1,5 @@
 {
-  "name": "rudder",
+  "name": "@vivekyy/rudder",
   "version": "0.1.0",
   "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
   "type": "module",
@@ -12,11 +12,37 @@
   "files": [
     "bin",
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
+  "keywords": [
+    "ai",
+    "claude",
+    "claude-code",
+    "codex",
+    "prompts",
+    "digest",
+    "cli",
+    "productivity",
+    "developer-tools"
+  ],
+  "author": "Vivek Yanamadula <vivek@archermoney.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/Vivekyy/Rudder#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vivekyy/Rudder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vivekyy/Rudder/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test"
+    "test": "node --test",
+    "prepublishOnly": "npm run typecheck && npm test"
   },
   "dependencies": {
     "shell-quote": "^1.8.1"
@@ -25,6 +51,5 @@
     "@types/node": "^22",
     "@types/shell-quote": "^1.7.5",
     "typescript": "^5.7.0"
-  },
-  "license": "MIT"
+  }
 }

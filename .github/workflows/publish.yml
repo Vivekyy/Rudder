@@ -1,0 +1,37 @@
+name: Publish to npm
+
+# Publishes the package whenever a version tag (e.g. v0.1.0) is pushed.
+# Cut a release with:  npm version patch && git push --follow-tags
+#
+# Auth uses npm Trusted Publishers (OIDC) — no NPM_TOKEN secret required.
+# Configure it once at npmjs.com -> package -> Settings -> Trusted Publisher:
+#   Provider: GitHub Actions | Repo: Vivekyy/Rudder | Workflow: publish.yml
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for OIDC trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted Publishers (OIDC) needs npm >= 11.5.1, newer than what the
+      # runner ships. Provenance is generated automatically for public packages.
+      - run: npm install -g npm@latest
+
+      - run: npm ci
+
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npm publish

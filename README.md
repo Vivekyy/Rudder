@@ -71,11 +71,8 @@ do?"
 ## Install
 
 ```bash
-git clone <this-repo> rudder && cd rudder
-npm install        # install dependencies
-npm link           # puts `rudder` on your PATH
-
-rudder init        # creates the database and installs the hooks
+npm install -g @vivekyy/rudder    # puts `rudder` on your PATH
+rudder init                       # creates the database and installs the hooks
 ```
 
 `rudder init`:
@@ -86,9 +83,30 @@ rudder init        # creates the database and installs the hooks
 Existing config files are backed up to `*.rudder-bak` before being modified, and
 the command is idempotent — running it twice won't duplicate the hooks.
 
+### From source
+
+```bash
+git clone https://github.com/Vivekyy/Rudder.git rudder && cd rudder
+npm install        # install dependencies
+npm link           # puts `rudder` on your PATH
+rudder init
+```
+
 > If you don't want to `npm link`, you can run rudder directly with
 > `node /path/to/rudder/bin/rudder.ts <command>`. `rudder init` always wires the
 > hooks to an absolute path, so they keep working regardless of your `PATH`.
+
+## Upgrade
+
+```bash
+npm update -g @vivekyy/rudder    # or: npm install -g @vivekyy/rudder@latest
+```
+
+The hooks point at the global install's absolute path, which is stable across
+upgrades, so there's nothing to re-wire. Re-run `rudder init` only after an
+upgrade whose notes say the hook format changed (it's idempotent and safe to
+re-run). If you installed from source, upgrade with `git pull && npm install`
+instead — the `npm link` symlink picks up the new code with no rebuild.
 
 ## Commands
 
