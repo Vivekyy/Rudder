@@ -46,31 +46,45 @@ capture (the hook fails and the fail-safe wrapper swallows the error).
 5. After the PR opens, address any review comments with the `address-pr-comments`
    skill (Codex equivalent of `/address-pr-comments`).
 
+## Continuous integration
+
+`.github/workflows/test.yml` runs `npm ci`, `npm run typecheck`, `npm test`, and
+`npm run build` on every push. It is the gate that keeps `main` green; make it a
+**required status check** in branch protection so untested code can't merge.
+Testing deliberately lives here, separate from the publish flow (the archer
+`testing.yml` split) — `publish.yml` only builds and publishes.
+
 ## Publishing to npm
 
-Publishing is **tag-triggered**, not merge-triggered. `.github/workflows/publish.yml`
-runs on any pushed tag matching `v*` and publishes `@vivekyy/rudder` to npm via a
-**Trusted Publisher (OIDC)** — there is no `NPM_TOKEN` secret. The workflow runs
-`npm ci`, `npm run typecheck`, `npm test`, then `npm publish`.
+Publishing is **automatic on merge to `main`** — there is no manual tagging step.
+`.github/workflows/publish.yml` runs on every push to `main` as a single job whose
+steps:
 
-To cut a release **after the version-bump PR has merged to `main`**:
+1. compute `v<version>` from `package.json`; if that tag already exists →
+   **no-op** (the merge didn't bump the version).
+2. otherwise `npm ci` then `npm publish` via a **Trusted Publisher (OIDC)** — there
+   is no `NPM_TOKEN` secret. The release path does **not** run tests itself — that's
+   `test.yml`'s job (see CI above). `npm publish` still runs `prepublishOnly`
+   (typecheck + test + build) as an intrinsic guard, so a broken tree can't ship.
+3. push the `v<version>` tag as the "shipped" marker, **after** a successful
+   publish (so a failed publish leaves no tag and a re-run retries cleanly).
 
-```
-git checkout main && git pull
-git tag v$(node -p "require('./package.json').version")   # tag must match package.json
-git push --follow-tags
-```
+So the only way to release is to land a version bump (`npm version patch
+--no-git-tag-version`, see the PR process) on `main`. Forgetting to bump means
+nothing publishes (safe); you can never accidentally skip the publish after a bump.
 
-Then verify the `Publish to npm` workflow succeeded and `npm view @vivekyy/rudder version`
-reflects the new release.
+After a version-bump PR merges, verify the `Publish to npm` workflow succeeded and
+`npm view @vivekyy/rudder version` reflects the new release.
 
 Notes:
-- The tag must match the `version` in `package.json`. If the bump already merged,
-  just tag that version — do **not** run `npm version patch` again (it would bump
-  a second time).
-- Tagging publishes whatever commit the tag points at, so always tag on `main`
-  **after** merge, never on the feature branch.
-- Trusted Publishing needs npm >= 11.5.1; the workflow upgrades npm before publishing.
+- **The OIDC workflow is `publish.yml`** (unchanged from before). The Trusted
+  Publisher at npmjs.com -> package -> Settings -> Trusted Publisher must name
+  `publish.yml` — which is what it already is, so no reconfiguration is needed.
+- The git tag is created **after a successful publish**, so it is a marker, not the
+  trigger. Do **not** push `v*` tags by hand — and never run `npm version patch` on
+  `main` (it would bump a second time).
+- If a publish ever fails midway (e.g. a transient npm error), no tag is written;
+  re-run `Publish to npm` from the Actions tab (`workflow_dispatch`) and it retries.
 
 ## Installing / re-wiring hooks
 
