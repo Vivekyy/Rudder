@@ -12,7 +12,14 @@ import { openDb, dbPath } from './db.ts';
  * array so callers never have to re-split a path that may contain spaces.
  */
 export function rudderArgv(sub: string[]): string[] {
-  const binPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'rudder.ts');
+  // Match the bin's extension to however this module was loaded: a dev checkout
+  // runs the `.ts` sources directly (src/install.ts ↔ bin/rudder.ts), while a
+  // built/published install runs the compiled `.js` (dist/src/install.js ↔
+  // dist/bin/rudder.js). Hardcoding `.ts` made `rudder init` write a hook
+  // pointing at a file that doesn't exist in the published package.
+  const here = fileURLToPath(import.meta.url);
+  const ext = here.endsWith('.ts') ? 'ts' : 'js';
+  const binPath = resolve(dirname(here), '..', 'bin', `rudder.${ext}`);
   return [process.execPath, binPath, ...sub];
 }
 

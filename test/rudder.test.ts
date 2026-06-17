@@ -36,6 +36,19 @@ test('insertPrompt stores and queries by local day; blanks are skipped', async (
   assert.equal(rows[0].project, 'archer');
 });
 
+test('rudderArgv points at a bin file that actually exists', async () => {
+  const { existsSync } = await import('node:fs');
+  const { rudderArgv } = await import('../src/install.ts');
+
+  const argv = rudderArgv(['hook', 'claude']);
+  assert.equal(argv[0], process.execPath);
+  assert.equal(argv[2], 'hook');
+  assert.equal(argv[3], 'claude');
+  // The whole point of init's hook: the bin path must resolve to a real file,
+  // in both the dev `.ts` checkout and the published `.js` build.
+  assert.ok(existsSync(argv[1]), `rudder bin should exist at ${argv[1]}`);
+});
+
 test('claude hook parses stdin JSON into a row', async () => {
   const { promptsForDay, localDay } = await import('../src/db.ts');
   const { claudeHook } = await import('../src/hooks.ts');
