@@ -1,20 +1,34 @@
 import { claudeHook, codexHook } from './hooks.ts';
 import { init } from './install.ts';
 import { digest, type Agent } from './digest.ts';
+import { serve } from './serve.ts';
+import { ensureTagged } from './tagger.ts';
+import { statsForDay } from './tags.ts';
+import { localDay } from './db.ts';
 
 const HELP = `rudder — record your AI coding prompts and digest your day.
 
 Usage:
   rudder init                 Create the database and install Claude Code + Codex hooks
+  rudder start [options]      Open a live dashboard of today's stats (updates as you work)
   rudder digest [options]     Summarize a day's work into a Markdown digest
+  rudder tag [options]        Classify untagged prompts and print the day's stats
   rudder hook claude          (internal) Record a Claude Code prompt from stdin
   rudder hook codex           (internal) Record a Codex turn from the notify payload
   rudder help                 Show this help
+
+start options:
+  --agent claude|codex        Which LLM tags prompts (default: claude, else codex)
+  --no-open                   Don't open a browser window (just run the server)
 
 digest options:
   --date YYYY-MM-DD           Day to summarize (default: today, local time)
   --agent claude|codex        Which LLM to summarize with (default: claude, else codex)
   --out PATH                  Output file (default: ./digest.md)
+
+tag options:
+  --date YYYY-MM-DD           Day to tag (default: today, local time)
+  --agent claude|codex        Which LLM classifies prompts (default: claude, else codex)
 `;
 
 function parseFlags(args: string[]): Record<string, string> {
@@ -33,6 +47,16 @@ function parseFlags(args: string[]): Record<string, string> {
     }
   }
   return flags;
+}
+
+/** Validate the --agent flag, exiting with an error on anything but claude/codex. */
+function parseAgentFlag(value: string | undefined): Agent | undefined {
+  if (value === undefined) return undefined;
+  if (value !== 'claude' && value !== 'codex') {
+    console.error("rudder: --agent must be 'claude' or 'codex'");
+    process.exit(1);
+  }
+  return value;
 }
 
 /** Hooks must never break the calling tool: log to stderr and still exit 0. */
@@ -62,13 +86,39 @@ export async function main(argv: string[]): Promise<void> {
       return;
     }
 
-    case 'digest': {
+    case 'start': {
       const flags = parseFlags(rest);
-      const agent = flags.agent as Agent | undefined;
-      if (agent && agent !== 'claude' && agent !== 'codex') {
-        console.error("rudder: --agent must be 'claude' or 'codex'");
+      const agent = parseAgentFlag(flags.agent);
+      serve({ agent, noOpen: flags['no-open'] === 'true' });
+      return;
+    }
+
+    case 'tag': {
+      const flags = parseFlags(rest);
+      const agent = parseAgentFlag(flags.agent);
+      const day = flags.date || localDay();
+      try {
+        const remaining = ensureTagged(day, agent);
+        const s = statsForDay(day);
+        const corr =
+          s.correctionPct === null ? 'no yes/no reactions' : `said no ${s.correctionPct}% of yes/no reactions`;
+        console.log(
+          `rudder: ${day} — ${s.total} prompts (${s.ignored} git chores skipped), ${corr}`
+        );
+        for (const [cat, stat] of Object.entries(s.byCategory)) {
+          console.log(`  ${cat.padEnd(13)} ${String(stat.pct).padStart(3)}%  (${stat.count})`);
+        }
+        if (remaining > 0) console.log(`  (${remaining} prompts still untagged)`);
+      } catch (err) {
+        console.error(`rudder: ${(err as Error).message}`);
         process.exit(1);
       }
+      return;
+    }
+
+    case 'digest': {
+      const flags = parseFlags(rest);
+      const agent = parseAgentFlag(flags.agent);
       try {
         digest({ day: flags.date, agent, out: flags.out });
       } catch (err) {

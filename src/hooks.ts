@@ -1,5 +1,22 @@
 import { basename } from 'node:path';
-import { insertPrompt } from './db.ts';
+import { insertPrompt, rudderPort } from './db.ts';
+
+/**
+ * Best-effort ping to the `rudder start` dashboard so it tags the new prompt and
+ * refreshes live. Fire-and-forget: if the daemon isn't running the connection is
+ * refused instantly, and we never let it slow or break the hook.
+ */
+async function notifyDashboard(): Promise<void> {
+  if (process.env.RUDDER_DISABLE) return;
+  try {
+    await fetch(`http://127.0.0.1:${rudderPort()}/notify`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(300),
+    });
+  } catch {
+    /* daemon not running, or slow — ignore */
+  }
+}
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -38,7 +55,7 @@ export async function claudeHook(): Promise<void> {
   const payload = safeParse(raw) ?? {};
   const cwd =
     (payload.cwd as string) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  insertPrompt({
+  const id = insertPrompt({
     source: 'claude',
     prompt: payload.prompt as string,
     session_id: payload.session_id as string,
@@ -47,6 +64,7 @@ export async function claudeHook(): Promise<void> {
     model: (payload.model as string) ?? null,
     raw,
   });
+  if (id !== null) await notifyDashboard();
 }
 
 /**
@@ -71,7 +89,7 @@ export async function codexHook(argv: string[]): Promise<void> {
   const cwd =
     (payload.cwd as string) || process.env.CODEX_WORKSPACE_ROOT || null;
 
-  insertPrompt({
+  const id = insertPrompt({
     source: 'codex',
     prompt,
     session_id:
@@ -84,4 +102,5 @@ export async function codexHook(argv: string[]): Promise<void> {
     model: (payload.model as string) ?? null,
     raw,
   });
+  if (id !== null) await notifyDashboard();
 }

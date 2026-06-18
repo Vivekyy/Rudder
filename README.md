@@ -21,9 +21,15 @@ API keys, no separate account.
 
 ```
 $ rudder digest
-rudder: 27 prompts on 2026-06-17; summarizing with claude...
+rudder: 27 prompts on 2026-06-17; classifying...
+rudder: summarizing with claude...
 rudder: wrote ./digest.md
 ```
+
+Or run `rudder start` for a **live dashboard** — a small window that updates as
+you work, showing how often you said no to your AI and where your prompts went
+(Architecting / Tuning / Bugfixing / Housekeeping). The same numbers power the
+digest, so the two never disagree.
 
 ## Why
 
@@ -113,10 +119,29 @@ instead — the `npm link` symlink picks up the new code with no rebuild.
 | Command | Description |
 | --- | --- |
 | `rudder init` | Create the database and install the Claude Code + Codex hooks. |
+| `rudder start [options]` | Open a live dashboard of today's stats; updates as you work. |
 | `rudder digest [options]` | Summarize a day's prompts into a Markdown digest. |
+| `rudder tag [options]` | Classify untagged prompts and print the day's stats. |
 | `rudder help` | Show usage. |
 | `rudder hook claude` | *(internal)* Record a Claude Code prompt — invoked by the hook. |
 | `rudder hook codex` | *(internal)* Record a Codex turn — invoked by `notify`. |
+
+### `rudder start`
+
+Starts a small local server (on `127.0.0.1`, port `41789` — override with
+`RUDDER_PORT`) and opens a chromeless dashboard window. While it runs, each new
+prompt is classified out-of-band by your `claude`/`codex` CLI and the window
+updates live with your correction rate and category breakdown for today.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--agent claude\|codex` | `claude`, else `codex` | Which LLM classifies prompts. |
+| `--no-open` | off | Run the server without opening a browser window. |
+
+It's safe to leave running and safe to run twice (a second `rudder start` just
+re-opens the window). Nothing is required for the digest to work — if the daemon
+isn't running, prompts are simply classified the next time you run `rudder start`,
+`rudder tag`, or `rudder digest`.
 
 ### `rudder digest`
 
@@ -134,17 +159,22 @@ rudder digest --date 2026-06-16        # a specific day
 rudder digest --agent codex --out ~/digests/today.md
 ```
 
-The digest groups your prompts by project and produces a Summary; Architecting,
-Tuning, and Bugfixing breakdowns (each with the share of prompts and the top
-things you worked on); Highlights; and Open threads.
+The digest produces a Summary (with your "said no to your AI" rate); Architecting,
+Tuning, Bugfixing, and Housekeeping breakdowns (each with the share of prompts and
+the top things you worked on); Highlights; and Open threads. The percentages are
+computed from the per-prompt tags rudder stores (see below), so they match the
+`rudder start` dashboard exactly — the LLM only writes the prose around them.
 
 ## Data & privacy
 
 All prompts are stored in plaintext in `~/.rudder/rudder.db` (schema: timestamp,
 local day, source, session id, working directory, project, prompt text, model,
-and the raw hook payload). To wipe everything, delete `~/.rudder/`. To stop
-recording, remove the hook from `~/.claude/settings.json` and the `notify` line
-from `~/.codex/config.toml`.
+and the raw hook payload). A companion `prompt_tags` table holds each prompt's
+computed category and reaction (the data behind the dashboard and digest stats).
+Classification uses the same local `claude`/`codex` CLI as the digest — nothing
+is sent anywhere else. To wipe everything, delete `~/.rudder/`. To stop recording,
+remove the hook from `~/.claude/settings.json` and the `notify` line from
+`~/.codex/config.toml`.
 
 Set `RUDDER_HOME` to override the storage location (used by the test suite). The
 hooks honor `RUDDER_DISABLE` — rudder sets it on the agent it spawns for `rudder

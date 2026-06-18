@@ -93,6 +93,85 @@ test('claude hook parses stdin JSON into a row', async () => {
   assert.equal(found!.project, 'archerdb');
 });
 
+test('statsForDay folds untagged prompts into housekeeping, then reflects tags', async () => {
+  const { insertPrompt, localDay } = await import('../src/db.ts');
+  const { upsertTag, statsForDay, untaggedPromptsForDay } = await import('../src/tags.ts');
+
+  const when = new Date('2020-03-04T12:00:00'); // local noon → stable local day
+  const day = localDay(when);
+  const ids = ['arch', 'tune', 'bug', 'house', 'chore'].map((p) =>
+    insertPrompt({ source: 'claude', prompt: p, ts: when })!
+  );
+
+  // Before tagging: everything is untagged and folds into housekeeping.
+  assert.equal(untaggedPromptsForDay(day).length, 5);
+  let s = statsForDay(day);
+  assert.equal(s.total, 5);
+  assert.equal(s.counted, 5);
+  assert.equal(s.byCategory.housekeeping.pct, 100);
+  assert.equal(s.correctionPct, null);
+
+  upsertTag(ids[0], 'architecting', 'none', 'claude');
+  upsertTag(ids[1], 'tuning', 'none', 'claude');
+  upsertTag(ids[2], 'bugfixing', 'disagree', 'claude');
+  upsertTag(ids[3], 'housekeeping', 'agree', 'claude');
+  upsertTag(ids[4], 'ignored', 'none', 'claude');
+
+  assert.equal(untaggedPromptsForDay(day).length, 0);
+  s = statsForDay(day);
+  assert.equal(s.total, 5);
+  assert.equal(s.ignored, 1);
+  assert.equal(s.counted, 4);
+  assert.equal(s.byCategory.architecting.pct, 25);
+  assert.equal(s.byCategory.bugfixing.count, 1);
+  assert.equal(s.agree, 1);
+  assert.equal(s.disagree, 1);
+  assert.equal(s.correctionPct, 50); // 1 disagree of 2 reactions
+
+  // Re-tagging the same prompt replaces, not duplicates.
+  upsertTag(ids[0], 'bugfixing', 'none', 'claude');
+  s = statsForDay(day);
+  assert.equal(s.total, 5, 'upsert must not create a second tag row');
+  assert.equal(s.byCategory.architecting.count, 0);
+  assert.equal(s.byCategory.bugfixing.count, 2);
+});
+
+test('untaggedPromptsForDay treats a tag from another version as untagged', async () => {
+  const { insertPrompt, localDay } = await import('../src/db.ts');
+  const { upsertTag, untaggedPromptsForDay, TAGGER_VERSION } = await import('../src/tags.ts');
+
+  const when = new Date('2020-05-06T12:00:00');
+  const day = localDay(when);
+  const id = insertPrompt({ source: 'codex', prompt: 'stale tag', ts: when })!;
+
+  upsertTag(id, 'tuning', 'none', 'codex', TAGGER_VERSION - 1); // older version
+  assert.ok(
+    untaggedPromptsForDay(day).some((r) => r.id === id),
+    'a tag at an older version should count as untagged'
+  );
+
+  upsertTag(id, 'tuning', 'none', 'codex', TAGGER_VERSION); // current version
+  assert.ok(!untaggedPromptsForDay(day).some((r) => r.id === id));
+});
+
+test('parseTags tolerates fences/prose and normalizes categories', async () => {
+  const { parseTags } = await import('../src/tagger.ts');
+
+  const out =
+    'Sure, here are the tags:\n```json\n' +
+    '[{"id":1,"category":"Architecting","reaction":"none"},' +
+    '{"id":2,"category":"bogus","reaction":"disagree"},' +
+    '{"id":"x","category":"tuning","reaction":"agree"}]\n```\nDone.';
+  const tags = parseTags(out);
+
+  assert.equal(tags.length, 2, 'non-integer id is dropped');
+  assert.equal(tags[0].category, 'architecting'); // lowercased
+  assert.equal(tags[0].reaction, 'none');
+  assert.equal(tags[1].category, 'housekeeping'); // unknown → fallback
+  assert.equal(tags[1].reaction, 'disagree');
+  assert.deepEqual(parseTags('no array here'), []);
+});
+
 test('codex hook reads the notify JSON arg (agent-turn-complete only)', async () => {
   const { promptsForDay, localDay } = await import('../src/db.ts');
   const { codexHook } = await import('../src/hooks.ts');
