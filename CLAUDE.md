@@ -13,6 +13,10 @@ Quick reference:
   `v<version>` tag yet, it publishes to npm via OIDC and then pushes the tag. Just
   land the version bump — no manual tagging. (Forgetting to bump = no publish.)
   Tests run separately in `.github/workflows/test.yml`.
+- **PRs that bump the version get a release alert.**
+  `.github/workflows/release-alert.yml` posts a sticky PR comment when merging
+  will publish a new release (mirrors `publish.yml`'s tag check), so a version
+  bump never lands unnoticed.
 - Path-resolving code must work in both the `.ts` dev tree and the compiled
   `.js` under `dist/` — see the `rudderArgv()` note in AGENTS.md.
 

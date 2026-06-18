@@ -54,6 +54,15 @@ capture (the hook fails and the fail-safe wrapper swallows the error).
 Testing deliberately lives here, separate from the publish flow (the archer
 `testing.yml` split) — `publish.yml` only builds and publishes.
 
+`.github/workflows/release-alert.yml` runs on every PR targeting `main` and posts
+a **sticky PR comment** when merging will publish a new release. It mirrors
+`publish.yml`'s exact condition — it reads the version from the PR branch's
+`package.json` and checks whether a `v<version>` tag already exists; if not, the
+comment warns that merging will ship `@vivekyy/rudder@<version>` to npm (and flips
+to a "no release on merge" note if the version isn't bumped). The comment is
+updated in place on each push (via a hidden `<!-- release-alert -->` marker) rather
+than duplicated.
+
 ## Publishing to npm
 
 Publishing is **automatic on merge to `main`** — there is no manual tagging step.
