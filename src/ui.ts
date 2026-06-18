@@ -210,8 +210,17 @@ export const INSTALL_HTML = `<!doctype html>
   const status = document.getElementById("status");
   let deferredPrompt = null;
 
-  // Already running as the installed app? Send them to the dashboard.
-  if (matchMedia("(display-mode: standalone)").matches) location.replace("/");
+  // Send the installed app to the dashboard. On install, the browser opens the
+  // app at the current URL (/install) rather than the manifest start_url (/), and
+  // may reparent this tab into the app window without reloading — so a one-time
+  // load check misses it. Re-check on the display-mode change, on pageshow, and a
+  // few delayed ticks to cover the reparent-without-reload case.
+  const standalone = matchMedia("(display-mode: standalone)");
+  function toDashboard() { if (standalone.matches) location.replace("/"); }
+  toDashboard();
+  if (standalone.addEventListener) standalone.addEventListener("change", toDashboard);
+  window.addEventListener("pageshow", toDashboard);
+  [200, 600, 1200].forEach((d) => setTimeout(toDashboard, d));
 
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
