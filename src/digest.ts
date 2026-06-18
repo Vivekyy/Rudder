@@ -41,7 +41,11 @@ Below is the chronological list of every prompt they sent, grouped by project. U
 Address the engineer directly in the second person throughout — write "You designed…", "You refined…", "You tracked down…", never "the engineer did X" or "they did X". This emphasizes their sense of agency over the day's work.
 
 Produce a Markdown digest with these sections:
-1. A one-paragraph **Summary** of the day at a high level.
+1. A one-paragraph **Summary** of the day at a high level. End this section with a single italicized line on its own, exactly in this form:
+
+   > *You said no to your AI x% of the time today.*
+
+   To compute x: among the prompts, consider only those that are a direct reaction to something the AI just produced — i.e. the prompt either agrees with / accepts the AI's work (e.g. "yes", "perfect", "looks good, now…", "ship it") or disagrees with / rejects / corrects it (e.g. "no", "that's wrong", "revert that", "don't do it that way", "undo"). Ignore every prompt that is neither — fresh instructions, questions, and open-ended requests do not count either way. Let x be the percentage of those agree-or-disagree prompts that were disagreements, rounded to the nearest whole number. If there are no agree-or-disagree prompts at all, write the line as "*You never said no to your AI today.*" instead.
 2. **Highlights** — notable accomplishments, hard problems, or decisions, if any are evident, written in the second person. This section should be in line with the next three.
 3. **Architecting** — designing new systems, structure, APIs, or overall approach.
 4. **Tuning** — refining the output of the coding agent: iterating on its responses, correcting or steering what it produced, re-prompting to get a better result, adjusting tone/format/scope of what the agent gives back. This is about tuning the agent's behavior and output, NOT tuning the codebase itself (changes to code structure or performance belong under Architecting or Bugfixing). Also fold in questions and investigation here — prompts asking the agent to explain, understand, or look into something.
