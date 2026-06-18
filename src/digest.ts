@@ -76,7 +76,7 @@ For example:
 Output ONLY the Markdown digest, with no preamble.
 
 ---
-PROMPTS FOR ${day} (pre-classified):
+PROMPTS FOR ${day}:
 
 ${rendered}`;
 }
@@ -112,10 +112,10 @@ export function digest(opts: DigestOptions = {}): string {
 
   console.log(`rudder: summarizing with ${agent}...`);
 
-  // Map each prompt to its stored category for grouping (untagged → housekeeping).
+  // Map each prompt to its stored category for grouping (untagged → ignored).
   const tags = categoryMapForDay(day);
   const categoryOf = new Map<number, Category>(
-    rows.map((r) => [r.id, tags.get(r.id) ?? 'housekeeping'])
+    rows.map((r) => [r.id, tags.get(r.id) ?? 'ignored'])
   );
 
   const instruction = buildInstruction(day, renderByCategory(rows, categoryOf));

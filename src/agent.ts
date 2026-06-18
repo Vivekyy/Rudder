@@ -3,13 +3,7 @@ import { spawnSync } from 'node:child_process';
 /** The LLM CLI rudder shells out to for digests and tagging. */
 export type Agent = 'claude' | 'codex';
 
-/**
- * Run `instruction` through the given agent's CLI and return its stdout.
- *
- * `RUDDER_DISABLE=1` is set on the spawned process so the agent we invoke does
- * not re-trigger rudder's own capture hooks and record this instruction as a
- * prompt for the day.
- */
+/** Run `instruction` through the given agent's CLI and return its stdout. */
 export function runAgent(agent: Agent, instruction: string): string {
   const cmd =
     agent === 'claude'
@@ -20,7 +14,7 @@ export function runAgent(agent: Agent, instruction: string): string {
     input: instruction,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, RUDDER_DISABLE: '1' },
+    env: { ...process.env, RUDDER_DISABLE: '1' }, // don't let this spawn re-trigger our hooks
   });
 
   if (res.error) {

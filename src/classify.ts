@@ -14,7 +14,6 @@ export type Category = 'architecting' | 'tuning' | 'bugfixing' | 'housekeeping' 
 /** Whether a prompt reacts to what the AI just produced. */
 export type Reaction = 'agree' | 'disagree' | 'none';
 
-/** The four categories that count toward the percentages, in display order. */
 export const CATEGORIES: readonly Category[] = [
   'architecting',
   'tuning',
@@ -25,22 +24,16 @@ export const CATEGORIES: readonly Category[] = [
 const CATEGORY_SET = new Set<Category>([...CATEGORIES, 'ignored']);
 const REACTION_SET = new Set<Reaction>(['agree', 'disagree', 'none']);
 
-/** Coerce arbitrary model output to a valid Category; unknowns fall back to housekeeping. */
 export function normCategory(value: unknown): Category {
   const v = String(value ?? '').trim().toLowerCase();
-  return CATEGORY_SET.has(v as Category) ? (v as Category) : 'housekeeping';
+  return CATEGORY_SET.has(v as Category) ? (v as Category) : 'ignored';
 }
 
-/** Coerce arbitrary model output to a valid Reaction; unknowns fall back to none. */
 export function normReaction(value: unknown): Reaction {
   const v = String(value ?? '').trim().toLowerCase();
   return REACTION_SET.has(v as Reaction) ? (v as Reaction) : 'none';
 }
 
-/**
- * The rubric the tagger gives the model. Kept verbatim-aligned with the original
- * digest definitions so behavior is unchanged by the move to per-prompt tagging.
- */
 export const CLASSIFICATION_RUBRIC = `Classify each prompt along two axes: a work CATEGORY and a REACTION.
 
 REACTION — does the prompt directly react to something the AI just produced?

@@ -1,4 +1,4 @@
-import { openDb, promptsForDay, type PromptRow } from './db.ts';
+import { openDb, type PromptRow } from './db.ts';
 import {
   CATEGORIES,
   normCategory,
@@ -78,10 +78,9 @@ function round(n: number): number {
 }
 
 /**
- * Aggregate a day's prompts into the dashboard/digest stats. Pure: reads the DB
- * and returns plain numbers. Prompts with no current-version tag are folded into
- * `housekeeping` (reaction `none`) so the percentages always cover every prompt
- * and sum to ~100% even mid-tagging.
+ * Aggregate a day's prompts into the dashboard/digest stats. Untagged prompts
+ * count as `ignored` (not yet classified), so they're excluded from the
+ * percentages rather than skewing a work category.
  */
 export function statsForDay(day: string): DayStats {
   const db = openDb();
@@ -110,8 +109,7 @@ export function statsForDay(day: string): DayStats {
   let disagree = 0;
 
   for (const r of rows) {
-    // Untagged rows fall back to housekeeping (the catch-all) until tagged.
-    const category: Category = r.category ? normCategory(r.category) : 'housekeeping';
+    const category: Category = r.category ? normCategory(r.category) : 'ignored';
     const reaction: Reaction = r.reaction ? normReaction(r.reaction) : 'none';
     if (category === 'ignored') ignored++;
     else counts[category]++;
@@ -149,6 +147,3 @@ export function categoryMapForDay(day: string): Map<number, Category> {
     .all(day, TAGGER_VERSION) as unknown as Array<{ id: number; category: string }>;
   return new Map(rows.map((r) => [r.id, normCategory(r.category)]));
 }
-
-/** Re-export so callers don't need to reach into db.ts for the prompt list. */
-export { promptsForDay };

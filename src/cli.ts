@@ -55,7 +55,6 @@ function parseFlags(args: string[]): Record<string, string> {
   return flags;
 }
 
-/** Validate the --agent flag, exiting with an error on anything but claude/codex. */
 function parseAgentFlag(value: string | undefined): Agent | undefined {
   if (value === undefined) return undefined;
   if (value !== 'claude' && value !== 'codex') {
@@ -76,8 +75,10 @@ const CATEGORY_LABELS: Array<[keyof DayStats['byCategory'], string]> = [
 function formatStats(day: string, s: DayStats, untagged: number): string {
   const lines: string[] = [];
   lines.push(`rudder — ${day}`);
+  // Untagged prompts count as ignored; show them separately from real git chores.
+  const chores = s.ignored - untagged;
   lines.push(
-    `${s.total} prompts · ${s.ignored} git chores skipped · ${s.counted} counted` +
+    `${s.total} prompts · ${chores} git chores skipped · ${s.counted} counted` +
       (untagged > 0 ? ` · ${untagged} not yet classified` : '')
   );
   const reacted = s.agree + s.disagree;

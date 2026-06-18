@@ -93,7 +93,7 @@ test('claude hook parses stdin JSON into a row', async () => {
   assert.equal(found!.project, 'archerdb');
 });
 
-test('statsForDay folds untagged prompts into housekeeping, then reflects tags', async () => {
+test('statsForDay counts untagged prompts as ignored, then reflects tags', async () => {
   const { insertPrompt, localDay } = await import('../src/db.ts');
   const { upsertTag, statsForDay, untaggedPromptsForDay } = await import('../src/tags.ts');
 
@@ -103,12 +103,13 @@ test('statsForDay folds untagged prompts into housekeeping, then reflects tags',
     insertPrompt({ source: 'claude', prompt: p, ts: when })!
   );
 
-  // Before tagging: everything is untagged and folds into housekeeping.
+  // Before tagging: everything is untagged → counted as ignored, not a category.
   assert.equal(untaggedPromptsForDay(day).length, 5);
   let s = statsForDay(day);
   assert.equal(s.total, 5);
-  assert.equal(s.counted, 5);
-  assert.equal(s.byCategory.housekeeping.pct, 100);
+  assert.equal(s.ignored, 5);
+  assert.equal(s.counted, 0);
+  assert.equal(s.byCategory.housekeeping.pct, 0);
   assert.equal(s.correctionPct, null);
 
   upsertTag(ids[0], 'architecting', 'none', 'claude');
@@ -167,7 +168,7 @@ test('parseTags tolerates fences/prose and normalizes categories', async () => {
   assert.equal(tags.length, 2, 'non-integer id is dropped');
   assert.equal(tags[0].category, 'architecting'); // lowercased
   assert.equal(tags[0].reaction, 'none');
-  assert.equal(tags[1].category, 'housekeeping'); // unknown → fallback
+  assert.equal(tags[1].category, 'ignored'); // unknown → fallback
   assert.equal(tags[1].reaction, 'disagree');
   assert.deepEqual(parseTags('no array here'), []);
 });

@@ -20,7 +20,8 @@ export interface ServeOptions {
 const DEBOUNCE_MS = 1500;
 
 function send(res: http.ServerResponse, status: number, type: string, body: string): void {
-  res.writeHead(status, { 'content-type': type });
+  // no-store so an updated dashboard/installer/manifest is never served stale.
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
   res.end(body);
 }
 
@@ -48,7 +49,9 @@ function findInstalledApp(): string | null {
     } catch {
       continue;
     }
-    const hit = entries.find((e) => e.endsWith('.app') && /rudder/i.test(e));
+    // Allowlist the bundle name (no shell metacharacters) before it ever reaches
+    // a child process — this is the sanitizer, the launch uses spawn (no shell).
+    const hit = entries.find((e) => /^[\w .()-]+\.app$/.test(e) && /rudder/i.test(e));
     if (hit) return join(dir, hit);
   }
   return null;
@@ -62,17 +65,17 @@ function spawnDetached(bin: string, args: string[]): void {
   }
 }
 
-/** Open a URL in the user's default browser (cross-platform). */
 function openBrowser(url: string): void {
+  // Direct exec, never a shell: `start` would need cmd.exe (a shell), so use the
+  // non-shell openers on every platform.
   if (process.platform === 'darwin') spawnDetached('open', [url]);
-  else if (process.platform === 'win32') spawnDetached('cmd', ['/c', 'start', '', url]);
+  else if (process.platform === 'win32') spawnDetached('explorer.exe', [url]);
   else spawnDetached('xdg-open', [url]);
 }
 
 /**
- * Make the app first-class: if it's already installed, launch the standalone app
- * directly (it loads the dashboard from this daemon). Otherwise open the focused
- * installer page in a browser tab — not the in-browser dashboard.
+ * If the app is already installed, launch the standalone app directly (it loads
+ * the dashboard from this daemon). Otherwise open the focused installer page.
  */
 function openDashboard(baseUrl: string): void {
   const app = findInstalledApp();
@@ -135,6 +138,15 @@ export function serve(opts: ServeOptions = {}): void {
     }, DEBOUNCE_MS);
   }
 
+  // Routes:
+  //   POST /notify              ping from the capture hook → schedule a tag pass
+  //   GET  /api/stats[?day=]    the day's stats as JSON
+  //   GET  /events              Server-Sent Events stream of stats (live updates)
+  //   GET  /manifest.webmanifest  PWA manifest
+  //   GET  /sw.js               pass-through service worker (PWA installability)
+  //   GET  /icon-192|512.png    generated app icons
+  //   GET  /install             installer landing page (opened when not installed)
+  //   GET  /                    the dashboard (what the installed app shows)
   const server = http.createServer((req, res) => {
     const { pathname } = new URL(req.url || '/', url);
 
@@ -203,8 +215,10 @@ export function serve(opts: ServeOptions = {}): void {
 
   server.listen(port, '127.0.0.1', () => {
     console.log(`rudder: dashboard at ${url} (Ctrl-C to stop)`);
-    // Backfill any prompts captured while the daemon was down, then open.
-    void tagAndBroadcast();
+    // Open first, then backfill. The tag pass is synchronous (spawnSync) and
+    // briefly blocks the event loop, so we defer it a beat to let the freshly
+    // opened page load its assets before the daemon goes busy classifying.
     if (!opts.noOpen) openDashboard(url);
+    setTimeout(() => void tagAndBroadcast(), 1500);
   });
 }

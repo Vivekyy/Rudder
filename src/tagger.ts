@@ -88,9 +88,9 @@ export function tagDay(day: string, agent: Agent): number {
 
 /**
  * Best-effort tagging for the dashboard/digest paths: never throws. If no agent
- * is available or the call fails, prompts are simply left untagged (and folded
- * into housekeeping by {@link statsForDay} until a later pass tags them).
- * Returns the count of prompts still untagged afterward.
+ * is available or the call fails, prompts are left untagged (counted as
+ * `ignored` by {@link statsForDay} until a later pass tags them). Returns the
+ * count of prompts still untagged afterward.
  */
 export function ensureTagged(day: string, preferred?: Agent): number {
   let agent: Agent;
