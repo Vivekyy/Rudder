@@ -36,8 +36,9 @@ dashboard and the digest can never disagree:
   which debounces (~1.5s) and batches a single agent call. If the daemon is down,
   the prompt is just left untagged and backfilled by the next `rudder start`,
   `rudder tag`, or `rudder digest`.
-- `statsForDay()` aggregates tags into percentages (untagged rows fall back to
-  housekeeping so percentages always sum to ~100%). `rudder digest` calls
+- `statsForDay()` aggregates tags into percentages (untagged rows count as
+  `ignored` and are excluded from the denominator, so the four percentages sum
+  to ~100% of counted prompts). `rudder digest` calls
   `ensureTagged` then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those
   exact numbers — the LLM is told not to reclassify or recompute.
 - `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
