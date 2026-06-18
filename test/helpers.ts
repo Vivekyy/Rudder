@@ -3,7 +3,7 @@
 import { mkdtempSync, writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, Writable } from 'node:stream';
 
 /** Make a fresh temp directory and return its path. */
 export function tmpDir(prefix = 'rudder-test-'): string {
@@ -90,10 +90,28 @@ export interface MainResult {
   exitCode: number | null;
 }
 
+/** A Writable that buffers everything written to it, for output capture. */
+function captureStream(sink: string[]): NodeJS.WriteStream {
+  const w = new Writable({
+    write(chunk, _enc, cb) {
+      sink.push(chunk.toString());
+      cb();
+    },
+  }) as unknown as NodeJS.WriteStream;
+  w.isTTY = false;
+  return w;
+}
+
 /**
  * Invoke `main(argv)` with stdout/stderr captured and process.exit stubbed to
  * throw an ExitSignal (so the test process survives). Returns captured output
  * and the exit code (null when main returned normally).
+ *
+ * We swap the whole `process.stdout`/`process.stderr` stream objects (and the
+ * `console` methods bound to them) rather than monkeypatching their `.write`.
+ * Under `node --test`'s default process isolation the runner streams its own
+ * results through the original `process.stdout` it captured at startup; patching
+ * `process.stdout.write` would swallow those messages and silently drop tests.
  */
 export async function runMain(
   main: (argv: string[]) => Promise<void>,
@@ -101,37 +119,45 @@ export async function runMain(
 ): Promise<MainResult> {
   const out: string[] = [];
   const err: string[] = [];
-  const origOut = process.stdout.write.bind(process.stdout);
-  const origErr = process.stderr.write.bind(process.stderr);
+  const origOut = Object.getOwnPropertyDescriptor(process, 'stdout')!;
+  const origErr = Object.getOwnPropertyDescriptor(process, 'stderr')!;
   const origExit = process.exit;
+  const origLog = console.log;
+  const origError = console.error;
   let exitCode: number | null = null;
 
-  process.stdout.write = ((s: string | Uint8Array) => {
-    out.push(s.toString());
-    return true;
-  }) as typeof process.stdout.write;
-  process.stderr.write = ((s: string | Uint8Array) => {
-    err.push(s.toString());
-    return true;
-  }) as typeof process.stderr.write;
+  Object.defineProperty(process, 'stdout', {
+    value: captureStream(out),
+    configurable: true,
+  });
+  Object.defineProperty(process, 'stderr', {
+    value: captureStream(err),
+    configurable: true,
+  });
+  console.log = (...args: unknown[]) => void out.push(args.join(' ') + '\n');
+  console.error = (...args: unknown[]) => void err.push(args.join(' ') + '\n');
   process.exit = ((code?: number) => {
     exitCode = code ?? 0;
     throw new ExitSignal(code);
   }) as typeof process.exit;
 
+  const restore = () => {
+    Object.defineProperty(process, 'stdout', origOut);
+    Object.defineProperty(process, 'stderr', origErr);
+    process.exit = origExit;
+    console.log = origLog;
+    console.error = origError;
+  };
+
   try {
     await main(argv);
   } catch (e) {
     if (!(e instanceof ExitSignal)) {
-      process.stdout.write = origOut;
-      process.stderr.write = origErr;
-      process.exit = origExit;
+      restore();
       throw e;
     }
   } finally {
-    process.stdout.write = origOut;
-    process.stderr.write = origErr;
-    process.exit = origExit;
+    restore();
   }
   return { stdout: out.join(''), stderr: err.join(''), exitCode };
 }

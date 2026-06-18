@@ -61,8 +61,24 @@ export function openDb(): DatabaseSync {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_prompts_day ON prompts(day);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_prompts_source ON prompts(source);');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS prompt_tags (
+      prompt_id      INTEGER PRIMARY KEY,    -- one tag per prompt (REFERENCES prompts(id))
+      category       TEXT NOT NULL,          -- architecting|tuning|bugfixing|housekeeping|ignored
+      reaction       TEXT NOT NULL,          -- agree|disagree|none
+      tagger         TEXT NOT NULL,          -- which agent classified it (claude|codex)
+      tagger_version INTEGER NOT NULL,       -- bump to invalidate & re-tag
+      ts             TEXT NOT NULL           -- when it was tagged (ISO 8601 UTC)
+    );
+  `);
   _db = db;
   return db;
+}
+
+/** TCP port the `rudder start` dashboard daemon listens on (override with RUDDER_PORT). */
+export function rudderPort(): number {
+  const p = Number(process.env.RUDDER_PORT);
+  return Number.isInteger(p) && p > 0 && p < 65536 ? p : 41789;
 }
 
 export function localDay(date: Date = new Date()): string {

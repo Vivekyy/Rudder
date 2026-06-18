@@ -7,10 +7,45 @@ Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 ## Layout
 
 - `src/` — TypeScript sources (run directly via Node's type stripping in dev).
+  - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
+  - `hooks.ts` — Claude/Codex capture hooks; best-effort `/notify` ping to the dashboard.
+  - `classify.ts` — the single source of truth for the category/reaction rubric.
+  - `tagger.ts` — classifies untagged prompts via the agent CLI (`ensureTagged`/`tagDay`).
+  - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
+  - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
+  - `digest.ts` — renders the Markdown digest; numbers come from `statsForDay`, the LLM only writes prose.
+  - `serve.ts` / `ui.ts` — the `rudder start` daemon and its inlined dashboard page
+    (also a PWA: `ui.ts` exports the manifest + service worker, served by `serve.ts`).
+  - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
+  - `install.ts` — `rudder init` (DB + hook wiring).
 - `bin/rudder.ts` — CLI entry point.
 - `dist/` — compiled output, the only code that ships (see `files` in `package.json`).
   Dev runs `bin/rudder.ts`; the published package runs `dist/bin/rudder.js`.
 - `test/` — `node --test` suites.
+
+## Stats pipeline (dashboard + digest)
+
+Per-prompt classification is the single source of the numbers, so the live
+dashboard and the digest can never disagree:
+
+- Each prompt is tagged exactly once (`prompt_tags`, keyed by `prompt_id`) with a
+  `category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
+  (agree/disagree/none), using the shared rubric in `classify.ts`.
+- Tagging is **out-of-band**, never in the capture hook: the hook inserts the
+  prompt and fires a best-effort `POST /notify` at the `rudder start` daemon,
+  which debounces (~1.5s) and batches a single agent call. If the daemon is down,
+  the prompt is just left untagged and backfilled by the next `rudder start`,
+  `rudder tag`, or `rudder digest`.
+- `statsForDay()` aggregates tags into percentages (untagged rows count as
+  `ignored` and are excluded from the denominator, so the four percentages sum
+  to ~100% of counted prompts). `rudder digest` calls
+  `ensureTagged` then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those
+  exact numbers — the LLM is told not to reclassify or recompute.
+- `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
+  older version count as untagged and get reclassified). Bump it whenever the
+  rubric or prompt rendering changes in a way that should re-tag history.
+- The tagger inherits `RUDDER_DISABLE=1` via `runAgent`, so classifying a prompt
+  never records the classification instruction as a new prompt.
 
 ## Local development
 
