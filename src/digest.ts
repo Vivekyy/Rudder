@@ -44,10 +44,11 @@ Produce a Markdown digest with these sections:
 1. A one-paragraph **Summary** of the day at a high level.
 2. **Highlights** — notable accomplishments, hard problems, or decisions, if any are evident, written in the second person. This section should be in line with the next three.
 3. **Architecting** — designing new systems, structure, APIs, or overall approach.
-4. **Tuning** — refining the output of the coding agent: iterating on its responses, correcting or steering what it produced, re-prompting to get a better result, adjusting tone/format/scope of what the agent gives back. This is about tuning the agent's behavior and output, NOT tuning the codebase itself (changes to code structure or performance belong under Architecting or Bugfixing).
-5. **Bugfixing** — diagnosing and fixing defects, errors, or failing tests.
+4. **Tuning** — refining the output of the coding agent: iterating on its responses, correcting or steering what it produced, re-prompting to get a better result, adjusting tone/format/scope of what the agent gives back. This is about tuning the agent's behavior and output, NOT tuning the codebase itself (changes to code structure or performance belong under Architecting or Bugfixing). Also fold in questions and investigation here — prompts asking the agent to explain, understand, or look into something.
+5. **Bugfixing** — diagnosing and fixing defects, errors, or failing tests. Also fold in review work here — triaging and remediating PR review feedback.
+6. **Housekeeping** — everything else that doesn't fit the three above: coordination and process (opening/merging PRs, running checks, git operations), documentation and config edits, syncing conventions between repos, scope-trimming, and other routine upkeep.
 
-For each of those three core sections (Architecting, Tuning, Bugfixing), use exactly this format:
+For each of those four core sections (Architecting, Tuning, Bugfixing, Housekeeping), use exactly this format:
 - A lead line: \`x% of prompts, focused on {summary of the types of things you were doing}\`
 - Then a numbered list of up to the top 3 specific things, each written in the second person ("You …").
 
@@ -57,9 +58,9 @@ For example:
 > 2. You defined how prompts are grouped by project for the digest
 > 3. You sketched the agent-spawning flow for Claude and Codex
 
-6. **Open threads** — anything that looks unfinished or like a next step.
+7. **Open threads** — anything that looks unfinished or like a next step.
 
-For Architecting, Tuning, and Bugfixing, classify each prompt into at most one of the three categories; prompts that fit none are simply left out of those percentages (so the three percentages need not sum to 100%). Be specific and grounded in the prompts. Do not invent work that isn't supported by the data. Output ONLY the Markdown digest, with no preamble.
+For Architecting, Tuning, Bugfixing, and Housekeeping, classify each prompt into exactly one of the four categories. Housekeeping is the catch-all, so every prompt lands somewhere and the four percentages should sum to ~100% (allowing for rounding). Be specific and grounded in the prompts. Do not invent work that isn't supported by the data. Output ONLY the Markdown digest, with no preamble.
 
 ---
 PROMPTS FOR ${day}:
