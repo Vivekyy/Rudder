@@ -119,7 +119,8 @@ instead — the `npm link` symlink picks up the new code with no rebuild.
 | Command | Description |
 | --- | --- |
 | `rudder init` | Create the database and install the Claude Code + Codex hooks. |
-| `rudder start [options]` | Open a live dashboard of today's stats; updates as you work. |
+| `rudder start [options]` | Open the live dashboard app; updates as you work. |
+| `rudder stats [options]` | Print today's correction rate and category breakdown. |
 | `rudder digest [options]` | Summarize a day's prompts into a Markdown digest. |
 | `rudder tag [options]` | Classify untagged prompts and print the day's stats. |
 | `rudder help` | Show usage. |
@@ -129,13 +130,39 @@ instead — the `npm link` symlink picks up the new code with no rebuild.
 ### `rudder start`
 
 Starts a small local server (on `127.0.0.1`, port `41789` — override with
-`RUDDER_PORT`) and opens the dashboard in your browser. While it runs, each new
-prompt is classified out-of-band by your `claude`/`codex` CLI and the page
-updates live with your correction rate and category breakdown for today.
+`RUDDER_PORT`). While it runs, each new prompt is classified out-of-band by your
+`claude`/`codex` CLI and the dashboard updates live with your correction rate and
+category breakdown for today.
 
-The dashboard is a **PWA**: click **Install app** (or your browser's Install /
-"Add to Dock" menu) to get a standalone window with its own dock icon and no
-browser chrome — it behaves like a native app while `rudder start` is running.
+The dashboard is a **standalone app** (a PWA):
+
+- The **first** time, `rudder start` opens a small installer page — click **Install
+  app** (or, in Safari, `File → Add to Dock`) to add rudder to your dock with its
+  own icon and no browser chrome. The installed window auto-sizes to its content.
+- **After** it's installed, `rudder start` launches the app directly (no browser
+  tab). The app loads from the running daemon, so keep `rudder start` running.
+
+If you'd rather not install anything, open `http://127.0.0.1:41789/` in a browser.
+
+### `rudder stats`
+
+Prints the same correction rate and category breakdown as the dashboard, on the
+command line:
+
+```
+$ rudder stats
+rudder — 2026-06-18
+26 prompts · 3 git chores skipped · 23 counted
+You said no to your AI 12% of the time  (3 of 25 yes/no reactions)
+
+  Architecting   30%  █████░░░░░░░░░░░  7
+  Tuning         17%  ███░░░░░░░░░░░░░  4
+  Bugfixing       9%  █░░░░░░░░░░░░░░░  2
+  Housekeeping   43%  ███████░░░░░░░░░  10
+```
+
+It classifies any not-yet-tagged prompts first (pass `--no-tag` for an instant
+read of only what's already classified, and `--date YYYY-MM-DD` for another day).
 
 | Option | Default | Description |
 | --- | --- | --- |

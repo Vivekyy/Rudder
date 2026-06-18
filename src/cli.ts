@@ -3,7 +3,7 @@ import { init } from './install.ts';
 import { digest, type Agent } from './digest.ts';
 import { serve } from './serve.ts';
 import { ensureTagged } from './tagger.ts';
-import { statsForDay } from './tags.ts';
+import { statsForDay, untaggedPromptsForDay, type DayStats } from './tags.ts';
 import { localDay } from './db.ts';
 
 const HELP = `rudder — record your AI coding prompts and digest your day.
@@ -11,6 +11,7 @@ const HELP = `rudder — record your AI coding prompts and digest your day.
 Usage:
   rudder init                 Create the database and install Claude Code + Codex hooks
   rudder start [options]      Open a live dashboard of today's stats (updates as you work)
+  rudder stats [options]      Print today's correction rate and category breakdown
   rudder digest [options]     Summarize a day's work into a Markdown digest
   rudder tag [options]        Classify untagged prompts and print the day's stats
   rudder hook claude          (internal) Record a Claude Code prompt from stdin
@@ -19,7 +20,12 @@ Usage:
 
 start options:
   --agent claude|codex        Which LLM tags prompts (default: claude, else codex)
-  --no-open                   Don't open a browser window (just run the server)
+  --no-open                   Don't open the app/installer (just run the server)
+
+stats options:
+  --date YYYY-MM-DD           Day to report (default: today, local time)
+  --agent claude|codex        Which LLM classifies any untagged prompts first
+  --no-tag                    Show current tags only; skip classifying (instant)
 
 digest options:
   --date YYYY-MM-DD           Day to summarize (default: today, local time)
@@ -59,6 +65,37 @@ function parseAgentFlag(value: string | undefined): Agent | undefined {
   return value;
 }
 
+const CATEGORY_LABELS: Array<[keyof DayStats['byCategory'], string]> = [
+  ['architecting', 'Architecting'],
+  ['tuning', 'Tuning'],
+  ['bugfixing', 'Bugfixing'],
+  ['housekeeping', 'Housekeeping'],
+];
+
+/** Render a day's stats as a compact terminal report with little bar charts. */
+function formatStats(day: string, s: DayStats, untagged: number): string {
+  const lines: string[] = [];
+  lines.push(`rudder — ${day}`);
+  lines.push(
+    `${s.total} prompts · ${s.ignored} git chores skipped · ${s.counted} counted` +
+      (untagged > 0 ? ` · ${untagged} not yet classified` : '')
+  );
+  const reacted = s.agree + s.disagree;
+  lines.push(
+    s.correctionPct === null
+      ? 'You never said no to your AI today.'
+      : `You said no to your AI ${s.correctionPct}% of the time  (${s.disagree} of ${reacted} yes/no reactions)`
+  );
+  lines.push('');
+  for (const [key, label] of CATEGORY_LABELS) {
+    const { pct, count } = s.byCategory[key];
+    const filled = Math.round((pct / 100) * 16);
+    const bar = '█'.repeat(filled) + '░'.repeat(16 - filled);
+    lines.push(`  ${label.padEnd(13)} ${String(pct).padStart(3)}%  ${bar}  ${count}`);
+  }
+  return lines.join('\n');
+}
+
 /** Hooks must never break the calling tool: log to stderr and still exit 0. */
 async function runHookSafely(fn: () => Promise<void>): Promise<void> {
   try {
@@ -93,22 +130,18 @@ export async function main(argv: string[]): Promise<void> {
       return;
     }
 
+    case 'stats':
     case 'tag': {
       const flags = parseFlags(rest);
       const agent = parseAgentFlag(flags.agent);
       const day = flags.date || localDay();
       try {
-        const remaining = ensureTagged(day, agent);
-        const s = statsForDay(day);
-        const corr =
-          s.correctionPct === null ? 'no yes/no reactions' : `said no ${s.correctionPct}% of yes/no reactions`;
-        console.log(
-          `rudder: ${day} — ${s.total} prompts (${s.ignored} git chores skipped), ${corr}`
-        );
-        for (const [cat, stat] of Object.entries(s.byCategory)) {
-          console.log(`  ${cat.padEnd(13)} ${String(stat.pct).padStart(3)}%  (${stat.count})`);
-        }
-        if (remaining > 0) console.log(`  (${remaining} prompts still untagged)`);
+        // `tag` always classifies; `stats` classifies unless --no-tag.
+        const remaining =
+          cmd === 'tag' || flags['no-tag'] !== 'true'
+            ? ensureTagged(day, agent)
+            : untaggedPromptsForDay(day).length;
+        process.stdout.write(formatStats(day, statsForDay(day), remaining) + '\n');
       } catch (err) {
         console.error(`rudder: ${(err as Error).message}`);
         process.exit(1);

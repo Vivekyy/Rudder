@@ -1,10 +1,13 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { localDay, rudderPort } from './db.ts';
 import { statsForDay } from './tags.ts';
 import { ensureTagged } from './tagger.ts';
 import { resolveAgent, type Agent } from './agent.ts';
-import { PAGE_HTML, MANIFEST, SERVICE_WORKER } from './ui.ts';
+import { PAGE_HTML, INSTALL_HTML, MANIFEST, SERVICE_WORKER } from './ui.ts';
 import { pngIcon } from './icon.ts';
 
 export interface ServeOptions {
@@ -22,24 +25,63 @@ function send(res: http.ServerResponse, status: number, type: string, body: stri
 }
 
 /**
- * Open the dashboard in the user's default browser, from which they can install
- * it as a standalone app (the page is a PWA — "Install app" button, or the
- * browser's install / "Add to Dock" menu). We deliberately open a normal browser
- * tab rather than a Chrome `--app` window: `open --args --app=` is silently
- * ignored when the browser is already running, and the install affordance is
- * what makes this feel like a native app anyway.
+ * Look for the installed PWA's `.app` bundle (macOS). Chrome/Edge/Brave install
+ * PWAs into "<Browser> Apps.localized" folders; Safari's "Add to Dock" web apps
+ * land directly in ~/Applications. We match a bundle whose name contains
+ * "rudder". Returns the bundle path, or null if not found / not macOS.
  */
-function openWindow(url: string): void {
-  const cmd =
-    process.platform === 'darwin'
-      ? { bin: 'open', args: [url] }
-      : process.platform === 'win32'
-        ? { bin: 'cmd', args: ['/c', 'start', '', url] }
-        : { bin: 'xdg-open', args: [url] };
+function findInstalledApp(): string | null {
+  if (process.platform !== 'darwin') return null;
+  const home = homedir();
+  const dirs = [
+    join(home, 'Applications', 'Chrome Apps.localized'),
+    join(home, 'Applications', 'Chrome Apps'),
+    join(home, 'Applications', 'Edge Apps.localized'),
+    join(home, 'Applications', 'Brave Apps.localized'),
+    join(home, 'Applications'),
+    '/Applications',
+  ];
+  for (const dir of dirs) {
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    const hit = entries.find((e) => e.endsWith('.app') && /rudder/i.test(e));
+    if (hit) return join(dir, hit);
+  }
+  return null;
+}
+
+function spawnDetached(bin: string, args: string[]): void {
   try {
-    spawn(cmd.bin, cmd.args, { stdio: 'ignore', detached: true }).unref();
+    spawn(bin, args, { stdio: 'ignore', detached: true }).unref();
   } catch {
-    /* headless / no browser — the URL is printed for the user to open manually */
+    /* headless / nothing to open — the URL is printed for the user to open manually */
+  }
+}
+
+/** Open a URL in the user's default browser (cross-platform). */
+function openBrowser(url: string): void {
+  if (process.platform === 'darwin') spawnDetached('open', [url]);
+  else if (process.platform === 'win32') spawnDetached('cmd', ['/c', 'start', '', url]);
+  else spawnDetached('xdg-open', [url]);
+}
+
+/**
+ * Make the app first-class: if it's already installed, launch the standalone app
+ * directly (it loads the dashboard from this daemon). Otherwise open the focused
+ * installer page in a browser tab — not the in-browser dashboard.
+ */
+function openDashboard(baseUrl: string): void {
+  const app = findInstalledApp();
+  if (app) {
+    console.log(`rudder: opening installed app (${app})`);
+    spawnDetached('open', [app]);
+  } else {
+    console.log('rudder: opening installer — install the app, then `rudder start` opens it directly');
+    openBrowser(`${baseUrl}install`);
   }
 }
 
@@ -136,6 +178,11 @@ export function serve(opts: ServeOptions = {}): void {
       return;
     }
 
+    if (pathname === '/install') {
+      send(res, 200, 'text/html; charset=utf-8', INSTALL_HTML);
+      return;
+    }
+
     if (pathname === '/') {
       send(res, 200, 'text/html; charset=utf-8', PAGE_HTML);
       return;
@@ -146,9 +193,9 @@ export function serve(opts: ServeOptions = {}): void {
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
-      // A daemon is already running — just open (another) window and exit.
+      // A daemon is already running — just open the app/installer and exit.
       console.log(`rudder: dashboard already running at ${url}`);
-      if (!opts.noOpen) openWindow(url);
+      if (!opts.noOpen) openDashboard(url);
       process.exit(0);
     }
     throw err;
@@ -156,9 +203,8 @@ export function serve(opts: ServeOptions = {}): void {
 
   server.listen(port, '127.0.0.1', () => {
     console.log(`rudder: dashboard at ${url} (Ctrl-C to stop)`);
-    console.log('rudder: tip — click "Install app" (or your browser\'s Install / Add to Dock) for a standalone window.');
-    // Backfill any prompts captured while the daemon was down, then show the window.
+    // Backfill any prompts captured while the daemon was down, then open.
     void tagAndBroadcast();
-    if (!opts.noOpen) openWindow(url);
+    if (!opts.noOpen) openDashboard(url);
   });
 }

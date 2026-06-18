@@ -28,23 +28,20 @@ export const PAGE_HTML = `<!doctype html>
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 560px; margin: 0 auto; padding: 28px 22px 40px; }
-  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 22px; }
-  h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+  .wrap { max-width: 380px; margin: 0 auto; padding: 18px 16px 20px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
   h1 span { color: var(--muted); font-weight: 400; }
-  .topright { display: flex; align-items: center; gap: 12px; }
-  #install { background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
-  #install:hover { border-color: var(--accent); }
   .live { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 rgba(63,185,80,.6); animation: pulse 2s infinite; }
   .dot.off { background: var(--muted); animation: none; }
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(63,185,80,.6);} 70% { box-shadow: 0 0 0 7px rgba(63,185,80,0);} 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0);} }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-  .correction .big { font-size: 52px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .correction .big { font-size: 46px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
   .correction .label { color: var(--muted); margin-top: 8px; }
   .correction .sub { color: var(--muted); font-size: 12px; margin-top: 10px; }
   .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 0 0 14px; }
-  .bar-row { margin-bottom: 14px; }
+  .bar-row { margin-bottom: 12px; }
   .bar-row:last-child { margin-bottom: 0; }
   .bar-head { display: flex; justify-content: space-between; margin-bottom: 5px; }
   .bar-head .name { font-weight: 500; }
@@ -61,10 +58,7 @@ export const PAGE_HTML = `<!doctype html>
 <div class="wrap">
   <header>
     <h1>rudder <span id="day"></span></h1>
-    <div class="topright">
-      <button id="install" hidden>⤓ Install app</button>
-      <div class="live"><span class="dot" id="dot"></span><span id="livetext">live</span></div>
-    </div>
+    <div class="live"><span class="dot" id="dot"></span><span id="livetext">live</span></div>
   </header>
 
   <div class="card correction">
@@ -129,28 +123,123 @@ export const PAGE_HTML = `<!doctype html>
     document.getElementById("livetext").textContent = on ? "live" : "reconnecting…";
   }
 
+  // When running as the installed standalone app, shrink the window to fit the
+  // content once it has rendered. Best-effort: browsers permit resizeTo for app
+  // windows, but ignore it for normal tabs (where the guard already returns).
+  let fitted = false;
+  function fitWindow() {
+    try {
+      if (fitted || !matchMedia("(display-mode: standalone)").matches) return;
+      const wrap = document.querySelector(".wrap");
+      const r = wrap.getBoundingClientRect();
+      const chromeW = window.outerWidth - window.innerWidth;
+      const chromeH = window.outerHeight - window.innerHeight;
+      window.resizeTo(Math.ceil(r.width) + chromeW, Math.ceil(r.bottom) + chromeH);
+      fitted = true;
+    } catch {}
+  }
+
   const es = new EventSource("/events");
-  es.onmessage = (e) => { try { render(JSON.parse(e.data)); setLive(true); } catch {} };
+  es.onmessage = (e) => { try { render(JSON.parse(e.data)); setLive(true); setTimeout(fitWindow, 60); } catch {} };
   es.onerror = () => setLive(false);
   es.onopen = () => setLive(true);
 
-  // PWA: register the (pass-through) service worker and surface an install button.
+  // Register the (pass-through) service worker so the standalone app keeps working.
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+</script>
+</body>
+</html>`;
+
+/**
+ * The installer landing page. This is what `rudder start` opens in a browser tab
+ * when the app is NOT yet installed — a focused "install rudder" screen rather
+ * than the in-browser dashboard. Once installed, `rudder start` launches the app
+ * directly and this page is never shown again.
+ */
+export const INSTALL_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Install rudder</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#0e1116" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="icon" href="/icon-192.png" />
+<style>
+  :root { --bg:#0e1116; --panel:#161b22; --line:#232a33; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card { width: 360px; max-width: 90vw; text-align: center; padding: 8px; }
+  img.logo { width: 84px; height: 84px; border-radius: 20px; }
+  h1 { font-size: 22px; margin: 18px 0 6px; }
+  p.lead { color: var(--muted); margin: 0 0 22px; }
+  button {
+    background: var(--accent); color: #06131f; border: 0; border-radius: 9px;
+    padding: 11px 20px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button:disabled { background: var(--line); color: var(--muted); cursor: default; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 16px; line-height: 1.6; }
+  .hint code { color: var(--text); background: var(--panel); padding: 1px 6px; border-radius: 5px; }
+  a { color: var(--accent); text-decoration: none; }
+  #status { min-height: 18px; color: var(--accent); font-size: 13px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <img class="logo" src="/icon-192.png" alt="rudder" />
+  <h1>Install rudder</h1>
+  <p class="lead">A live dashboard of your AI-coding stats, as a standalone app.</p>
+  <button id="install" disabled>Preparing…</button>
+  <div id="status"></div>
+  <div class="hint" id="hint">
+    On <b>Safari</b>, use <code>File → Add to Dock</code>.<br />
+    Already installed? Open <b>rudder</b> from your dock, or just run <code>rudder start</code> again.<br />
+    <a href="/">Or view in this browser →</a>
+  </div>
+</div>
+<script>
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  const btn = document.getElementById("install");
+  const status = document.getElementById("status");
   let deferredPrompt = null;
-  const installBtn = document.getElementById("install");
+
+  // Already running as the installed app? Send them to the dashboard.
+  if (matchMedia("(display-mode: standalone)").matches) location.replace("/");
+
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    installBtn.hidden = false;
+    btn.disabled = false;
+    btn.textContent = "Install app";
   });
-  installBtn.addEventListener("click", async () => {
+  btn.addEventListener("click", async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
+    const { outcome } = await deferredPrompt.userChoice;
     deferredPrompt = null;
-    installBtn.hidden = true;
+    if (outcome !== "accepted") { btn.disabled = false; }
   });
-  window.addEventListener("appinstalled", () => { installBtn.hidden = true; });
+  window.addEventListener("appinstalled", () => {
+    btn.disabled = true;
+    btn.textContent = "Installed ✓";
+    status.textContent = "Open rudder from your dock (the daemon stays running here).";
+  });
+
+  // If the browser never fires beforeinstallprompt (e.g. Safari, or already
+  // installed), guide the user rather than leaving a dead button.
+  setTimeout(() => {
+    if (!deferredPrompt && btn.textContent === "Preparing…") {
+      btn.textContent = "Use your browser's Install menu";
+      btn.disabled = true;
+    }
+  }, 1500);
 </script>
 </body>
 </html>`;
