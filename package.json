@@ -7,7 +7,7 @@
     "rudder": "dist/bin/rudder.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=23.6.0"
   },
   "files": [
     "dist",
@@ -48,7 +48,7 @@
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^24",
     "@types/shell-quote": "^1.7.5",
     "typescript": "^5.7.0"
   }

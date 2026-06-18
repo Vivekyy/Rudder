@@ -62,8 +62,7 @@ do?"
 
 ## Requirements
 
-- **Node.js ≥ 23.6** (rudder is written in TypeScript and run directly via Node's
-  built-in type stripping; SQLite uses the built-in `node:sqlite` module).
+- **Node.js ≥ 23.6**
 - **Claude Code** (`claude`) and/or **Codex** (`codex`) on your `PATH`. You only
   need one of them; rudder records whichever is installed and uses whichever is
   available to generate the digest.
@@ -88,6 +87,7 @@ the command is idempotent — running it twice won't duplicate the hooks.
 ```bash
 git clone https://github.com/Vivekyy/Rudder.git rudder && cd rudder
 npm install        # install dependencies
+npm run build      # compile to dist/ (npm link's `rudder` bin points here)
 npm link           # puts `rudder` on your PATH
 rudder init
 ```
@@ -162,7 +162,10 @@ digest`, so the digest's own prompt is never recorded.
 npm install
 npm run typecheck    # tsc --noEmit
 npm test             # node --test
+npm run build        # compile to dist/ (the only code published to npm)
 ```
 
-Rudder is plain TypeScript run via Node's native type stripping — there's no build
-step. Source lives in `src/`, the CLI entry point is `bin/rudder.ts`.
+Source lives in `src/` and the CLI entry point is `bin/rudder.ts`. In development
+these `.ts` files run directly via Node's native type stripping; `npm run build`
+compiles them to `dist/`, which is what gets published and what the installed
+`rudder` bin runs.
