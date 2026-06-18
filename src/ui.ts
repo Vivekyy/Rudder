@@ -10,6 +10,12 @@ export const PAGE_HTML = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>rudder</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#0e1116" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="rudder" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="icon" href="/icon-192.png" />
 <style>
   :root {
     --bg: #0e1116; --panel: #161b22; --line: #232a33; --text: #e6edf3;
@@ -26,6 +32,9 @@ export const PAGE_HTML = `<!doctype html>
   header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 22px; }
   h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
   h1 span { color: var(--muted); font-weight: 400; }
+  .topright { display: flex; align-items: center; gap: 12px; }
+  #install { background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  #install:hover { border-color: var(--accent); }
   .live { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 rgba(63,185,80,.6); animation: pulse 2s infinite; }
   .dot.off { background: var(--muted); animation: none; }
@@ -52,7 +61,10 @@ export const PAGE_HTML = `<!doctype html>
 <div class="wrap">
   <header>
     <h1>rudder <span id="day"></span></h1>
-    <div class="live"><span class="dot" id="dot"></span><span id="livetext">live</span></div>
+    <div class="topright">
+      <button id="install" hidden>⤓ Install app</button>
+      <div class="live"><span class="dot" id="dot"></span><span id="livetext">live</span></div>
+    </div>
   </header>
 
   <div class="card correction">
@@ -121,6 +133,50 @@ export const PAGE_HTML = `<!doctype html>
   es.onmessage = (e) => { try { render(JSON.parse(e.data)); setLive(true); } catch {} };
   es.onerror = () => setLive(false);
   es.onopen = () => setLive(true);
+
+  // PWA: register the (pass-through) service worker and surface an install button.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  let deferredPrompt = null;
+  const installBtn = document.getElementById("install");
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.hidden = false;
+  });
+  installBtn.addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installBtn.hidden = true;
+  });
+  window.addEventListener("appinstalled", () => { installBtn.hidden = true; });
 </script>
 </body>
 </html>`;
+
+/** Web app manifest — makes the dashboard installable as a standalone app. */
+export const MANIFEST = JSON.stringify({
+  name: 'rudder',
+  short_name: 'rudder',
+  description: 'Your live AI-coding stats',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone',
+  background_color: '#0e1116',
+  theme_color: '#0e1116',
+  icons: [
+    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+  ],
+});
+
+/**
+ * Minimal service worker. It registers a fetch handler (so the app qualifies as
+ * installable) but never calls respondWith, so requests — including the live SSE
+ * stream — pass straight through to the network with no caching or interference.
+ */
+export const SERVICE_WORKER = `self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener("fetch", () => {});
+`;

@@ -172,6 +172,28 @@ test('parseTags tolerates fences/prose and normalizes categories', async () => {
   assert.deepEqual(parseTags('no array here'), []);
 });
 
+test('pngIcon emits a valid PNG of the requested size', async () => {
+  const { pngIcon } = await import('../src/icon.ts');
+  const png = pngIcon(192);
+  // PNG signature.
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  // IHDR width/height live at byte offset 16/20.
+  assert.equal(png.readUInt32BE(16), 192);
+  assert.equal(png.readUInt32BE(20), 192);
+  // Memoized: same buffer instance on a second call.
+  assert.equal(pngIcon(192), png);
+});
+
+test('PWA manifest is installable and the service worker has a fetch handler', async () => {
+  const { MANIFEST, SERVICE_WORKER } = await import('../src/ui.ts');
+  const m = JSON.parse(MANIFEST);
+  assert.equal(m.display, 'standalone');
+  assert.ok(m.start_url);
+  const sizes = m.icons.map((i: { sizes: string }) => i.sizes);
+  assert.ok(sizes.includes('192x192') && sizes.includes('512x512'), 'needs 192 + 512 icons');
+  assert.match(SERVICE_WORKER, /addEventListener\("fetch"/);
+});
+
 test('codex hook reads the notify JSON arg (agent-turn-complete only)', async () => {
   const { promptsForDay, localDay } = await import('../src/db.ts');
   const { codexHook } = await import('../src/hooks.ts');

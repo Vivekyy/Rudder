@@ -129,9 +129,13 @@ instead — the `npm link` symlink picks up the new code with no rebuild.
 ### `rudder start`
 
 Starts a small local server (on `127.0.0.1`, port `41789` — override with
-`RUDDER_PORT`) and opens a chromeless dashboard window. While it runs, each new
-prompt is classified out-of-band by your `claude`/`codex` CLI and the window
+`RUDDER_PORT`) and opens the dashboard in your browser. While it runs, each new
+prompt is classified out-of-band by your `claude`/`codex` CLI and the page
 updates live with your correction rate and category breakdown for today.
+
+The dashboard is a **PWA**: click **Install app** (or your browser's Install /
+"Add to Dock" menu) to get a standalone window with its own dock icon and no
+browser chrome — it behaves like a native app while `rudder start` is running.
 
 | Option | Default | Description |
 | --- | --- | --- |

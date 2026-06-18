@@ -1,10 +1,11 @@
 import http from 'node:http';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { localDay, rudderPort } from './db.ts';
 import { statsForDay } from './tags.ts';
 import { ensureTagged } from './tagger.ts';
 import { resolveAgent, type Agent } from './agent.ts';
-import { PAGE_HTML } from './ui.ts';
+import { PAGE_HTML, MANIFEST, SERVICE_WORKER } from './ui.ts';
+import { pngIcon } from './icon.ts';
 
 export interface ServeOptions {
   agent?: Agent;
@@ -21,23 +22,22 @@ function send(res: http.ServerResponse, status: number, type: string, body: stri
 }
 
 /**
- * Open the dashboard in a chromeless Chrome "app" window when possible, falling
- * back through other Chromium browsers and finally the default browser. macOS
- * only for the app-window treatment; elsewhere we just open the default browser.
+ * Open the dashboard in the user's default browser, from which they can install
+ * it as a standalone app (the page is a PWA — "Install app" button, or the
+ * browser's install / "Add to Dock" menu). We deliberately open a normal browser
+ * tab rather than a Chrome `--app` window: `open --args --app=` is silently
+ * ignored when the browser is already running, and the install affordance is
+ * what makes this feel like a native app anyway.
  */
 function openWindow(url: string): void {
-  if (process.platform === 'darwin') {
-    const apps = ['Google Chrome', 'Brave Browser', 'Microsoft Edge', 'Chromium'];
-    for (const app of apps) {
-      const r = spawnSync('open', ['-na', app, '--args', `--app=${url}`], { stdio: 'ignore' });
-      if (r.status === 0) return;
-    }
-    spawnSync('open', [url], { stdio: 'ignore' }); // default browser
-    return;
-  }
-  const opener = process.platform === 'win32' ? 'start' : 'xdg-open';
+  const cmd =
+    process.platform === 'darwin'
+      ? { bin: 'open', args: [url] }
+      : process.platform === 'win32'
+        ? { bin: 'cmd', args: ['/c', 'start', '', url] }
+        : { bin: 'xdg-open', args: [url] };
   try {
-    spawn(opener, [url], { stdio: 'ignore', detached: true, shell: process.platform === 'win32' }).unref();
+    spawn(cmd.bin, cmd.args, { stdio: 'ignore', detached: true }).unref();
   } catch {
     /* headless / no browser — the URL is printed for the user to open manually */
   }
@@ -120,6 +120,22 @@ export function serve(opts: ServeOptions = {}): void {
       return;
     }
 
+    if (pathname === '/manifest.webmanifest') {
+      send(res, 200, 'application/manifest+json', MANIFEST);
+      return;
+    }
+
+    if (pathname === '/sw.js') {
+      send(res, 200, 'text/javascript', SERVICE_WORKER);
+      return;
+    }
+
+    if (pathname === '/icon-192.png' || pathname === '/icon-512.png') {
+      res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'max-age=86400' });
+      res.end(pngIcon(pathname.includes('512') ? 512 : 192));
+      return;
+    }
+
     if (pathname === '/') {
       send(res, 200, 'text/html; charset=utf-8', PAGE_HTML);
       return;
@@ -140,6 +156,7 @@ export function serve(opts: ServeOptions = {}): void {
 
   server.listen(port, '127.0.0.1', () => {
     console.log(`rudder: dashboard at ${url} (Ctrl-C to stop)`);
+    console.log('rudder: tip — click "Install app" (or your browser\'s Install / Add to Dock) for a standalone window.');
     // Backfill any prompts captured while the daemon was down, then show the window.
     void tagAndBroadcast();
     if (!opts.noOpen) openWindow(url);

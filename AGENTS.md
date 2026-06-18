@@ -14,7 +14,9 @@ Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
   - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
   - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
   - `digest.ts` — renders the Markdown digest; numbers come from `statsForDay`, the LLM only writes prose.
-  - `serve.ts` / `ui.ts` — the `rudder start` daemon and its inlined dashboard page.
+  - `serve.ts` / `ui.ts` — the `rudder start` daemon and its inlined dashboard page
+    (also a PWA: `ui.ts` exports the manifest + service worker, served by `serve.ts`).
+  - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
   - `install.ts` — `rudder init` (DB + hook wiring).
 - `bin/rudder.ts` — CLI entry point.
 - `dist/` — compiled output, the only code that ships (see `files` in `package.json`).
