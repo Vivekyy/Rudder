@@ -1,6 +1,6 @@
 {
   "name": "@vivekyy/rudder",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
   "type": "module",
   "bin": {
