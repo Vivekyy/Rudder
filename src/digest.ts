@@ -50,7 +50,7 @@ Produce a Markdown digest with these sections:
 3. **Architecting** — designing new systems, structure, APIs, or overall approach.
 4. **Tuning** — refining the output of the coding agent: iterating on its responses, correcting or steering what it produced, re-prompting to get a better result, adjusting tone/format/scope of what the agent gives back. This is about tuning the agent's behavior and output, NOT tuning the codebase itself (changes to code structure or performance belong under Architecting or Bugfixing). Also fold in questions and investigation here — prompts asking the agent to explain, understand, or look into something.
 5. **Bugfixing** — diagnosing and fixing defects, errors, or failing tests. Also fold in review work here — triaging and remediating PR review feedback.
-6. **Housekeeping** — everything else that doesn't fit the three above: coordination and process (opening/merging PRs, running checks, git operations), documentation and config edits, syncing conventions between repos, scope-trimming, and other routine upkeep.
+6. **Housekeeping** — everything else that doesn't fit the three above: process and coordination (running checks, release chores), documentation and config edits, syncing conventions between repos, scope-trimming, and other routine upkeep.
 
 For each of those four core sections (Architecting, Tuning, Bugfixing, Housekeeping), use exactly this format:
 - A lead line: \`x% of prompts, focused on {summary of the types of things you were doing}\`
@@ -64,7 +64,9 @@ For example:
 
 7. **Open threads** — anything that looks unfinished or like a next step.
 
-For Architecting, Tuning, Bugfixing, and Housekeeping, classify each prompt into exactly one of the four categories. Housekeeping is the catch-all, so every prompt lands somewhere and the four percentages should sum to ~100% (allowing for rounding). Be specific and grounded in the prompts. Do not invent work that isn't supported by the data. Output ONLY the Markdown digest, with no preamble.
+First, ignore entirely any prompt that is just a simple git or version-control chore — "make a PR", "open/merge the PR", "resolve the merge conflicts", "rebase onto main", "push", "commit this", "create a branch", and the like. These do not reflect substantive work, so drop them: do not classify them and do not count them toward the percentages below. (This is only for routine mechanics — a prompt that asks to fix something surfaced in review, debug a failing merge, or change what gets committed is real work and still belongs in Bugfixing/Housekeeping/etc.)
+
+For Architecting, Tuning, Bugfixing, and Housekeeping, classify each of the remaining prompts into exactly one of the four categories. Housekeeping is the catch-all for everything that survives the filter above, so every non-ignored prompt lands somewhere and the four percentages (computed over the non-ignored prompts) should sum to ~100% (allowing for rounding). Be specific and grounded in the prompts. Do not invent work that isn't supported by the data. Output ONLY the Markdown digest, with no preamble.
 
 ---
 PROMPTS FOR ${day}:
