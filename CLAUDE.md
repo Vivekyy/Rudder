@@ -19,6 +19,11 @@ Quick reference:
   bump never lands unnoticed.
 - Path-resolving code must work in both the `.ts` dev tree and the compiled
   `.js` under `dist/` — see the `rudderArgv()` note in AGENTS.md.
+- The dashboard (`rudder start`) and the digest read the **same** per-prompt tags
+  (`prompt_tags` / `statsForDay`), so their numbers always agree. Tagging is
+  out-of-band (never in the capture hook) and uses the shared rubric in
+  `classify.ts`. Bump `TAGGER_VERSION` to re-tag history. See the "Stats pipeline"
+  section in AGENTS.md.
 
 ## Slash commands
 
