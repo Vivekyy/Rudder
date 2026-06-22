@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 let home: string;
 
@@ -171,6 +171,18 @@ test('parseTags tolerates fences/prose and normalizes categories', async () => {
   assert.equal(tags[1].category, 'ignored'); // unknown → fallback
   assert.equal(tags[1].reaction, 'disagree');
   assert.deepEqual(parseTags('no array here'), []);
+});
+
+test('mergePathValues preserves order and de-duplicates PATH entries', async () => {
+  const { mergePathValues } = await import('../src/agent.ts');
+  const merged = mergePathValues(
+    ['/usr/bin', '/opt/homebrew/bin'].join(delimiter),
+    ['/opt/homebrew/bin', '/usr/local/bin', ''].join(delimiter),
+    undefined,
+    '/usr/bin'
+  );
+
+  assert.deepEqual(merged.split(delimiter), ['/usr/bin', '/opt/homebrew/bin', '/usr/local/bin']);
 });
 
 test('pngIcon emits a valid PNG of the requested size', async () => {
