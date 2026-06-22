@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -185,14 +185,41 @@ test('pngIcon emits a valid PNG of the requested size', async () => {
   assert.equal(pngIcon(192), png);
 });
 
-test('PWA manifest is installable and the service worker has a fetch handler', async () => {
-  const { MANIFEST, SERVICE_WORKER } = await import('../src/ui.ts');
-  const m = JSON.parse(MANIFEST);
-  assert.equal(m.display, 'standalone');
-  assert.ok(m.start_url);
-  const sizes = m.icons.map((i: { sizes: string }) => i.sizes);
-  assert.ok(sizes.includes('192x192') && sizes.includes('512x512'), 'needs 192 + 512 icons');
-  assert.match(SERVICE_WORKER, /addEventListener\("fetch"/);
+test('legacy database migration copies the db and only runs once', async () => {
+  const { migrateLegacyDb } = await import('../src/db.ts');
+  const legacy = mkdtempSync(join(tmpdir(), 'rudder-legacy-'));
+  const target = mkdtempSync(join(tmpdir(), 'rudder-target-'));
+  try {
+    writeFileSync(join(legacy, 'rudder.db'), 'legacy-db');
+    writeFileSync(join(legacy, 'rudder.db-wal'), 'legacy-wal');
+
+    const first = migrateLegacyDb(target, legacy);
+    assert.equal(first.migrated, true);
+    assert.ok(existsSync(join(target, 'rudder.db')));
+    assert.ok(existsSync(join(target, 'rudder.db-wal')));
+
+    const second = migrateLegacyDb(target, legacy);
+    assert.equal(second.migrated, false);
+    assert.equal(second.reason, 'already-initialized');
+  } finally {
+    rmSync(legacy, { recursive: true, force: true });
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+test('electron hook argv uses the app executable in hook mode', async () => {
+  const { electronHookArgv } = await import('../src/install.ts');
+  assert.deepEqual(electronHookArgv('/Applications/Rudder.app/Contents/MacOS/Rudder', ['hook', 'claude']), [
+    '/Applications/Rudder.app/Contents/MacOS/Rudder',
+    '--rudder-hook',
+    'claude',
+  ]);
+  assert.deepEqual(electronHookArgv('/repo/node_modules/.bin/electron', ['hook', 'codex'], '/repo/dist/electron/main.js'), [
+    '/repo/node_modules/.bin/electron',
+    '/repo/dist/electron/main.js',
+    '--rudder-hook',
+    'codex',
+  ]);
 });
 
 test('codex hook reads the notify JSON arg (agent-turn-complete only)', async () => {
