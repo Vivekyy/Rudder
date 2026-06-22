@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "description": "A local-first desktop app for AI coding prompts, stats, and daily digests.",
   "private": true,
+  "desktopName": "Rudder",
   "type": "module",
   "main": "dist/electron/main.js",
   "bin": {
@@ -52,6 +53,7 @@
   "build": {
     "appId": "com.vivekyy.rudder",
     "productName": "Rudder",
+    "executableName": "rudder",
     "directories": {
       "output": "release"
     },
@@ -73,7 +75,8 @@
         "AppImage",
         "deb"
       ],
-      "category": "Development"
+      "category": "Development",
+      "syncDesktopName": true
     },
     "win": {
       "target": "nsis"
@@ -92,6 +95,7 @@
     "@types/shell-quote": "^1.7.5",
     "electron": "^41.7.1",
     "electron-builder": "^26.15.3",
+    "node": "^26.3.1",
     "typescript": "^5.7.0"
   }
 }
