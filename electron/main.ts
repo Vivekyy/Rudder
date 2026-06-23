@@ -2,13 +2,9 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow } from 'electron';
-import {
-  claudeHook,
-  codexHook,
-  configureRudderHome,
-  electronHookArgv,
-  openDb,
-} from '../src/core.ts';
+import { configureRudderHome, openDb } from '../src/db.ts';
+import { claudeHook, codexHook } from '../src/hooks.ts';
+import { electronHookArgv } from '../src/install.ts';
 import { registerIpc, scheduleInitialTagging, startNotifyServer } from './api.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));

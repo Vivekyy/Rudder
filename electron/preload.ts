@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DayStats } from '../src/tags.ts';
-import type { GenerateDigestRequest, RudderDesktopApi } from '../src/desktop-api.ts';
+import type { GenerateDigestRequest, RudderDesktopApi } from '../src/api-contract.ts';
 
 const api: RudderDesktopApi = {
   getStats: (day?: string) => ipcRenderer.invoke('rudder:get-stats', day),

@@ -1,6 +1,6 @@
 'use client';
 
-import type { RudderDesktopApi } from '../src/desktop-api.ts';
+import type { RudderDesktopApi } from '../src/api-contract.ts';
 
 export function rudderClient(): RudderDesktopApi {
   if (typeof window !== 'undefined' && window.rudder) return window.rudder;

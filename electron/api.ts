@@ -1,22 +1,13 @@
 import http from 'node:http';
 import { ipcMain, shell, type BrowserWindow } from 'electron';
-import {
-  dbPath,
-  ensureTagged,
-  generateDigest,
-  hookStatus,
-  installHooks,
-  localDay,
-  resetAgentPathCache,
-  resolveAgent,
-  rudderPort,
-  setAgentPath,
-  statsForDay,
-  agentPath,
-  type Agent,
-  type HookArgvProvider,
-} from '../src/core.ts';
-import type { GenerateDigestRequest, RudderSettings } from '../src/desktop-api.ts';
+import { resetAgentPathCache, resolveAgent, type Agent } from '../src/agent.ts';
+import { dbPath, localDay, rudderPort } from '../src/db.ts';
+import { generateDigest } from '../src/digest.ts';
+import { hookStatus, installHooks, type HookArgvProvider } from '../src/install.ts';
+import { agentPath, setAgentPath } from '../src/settings.ts';
+import { statsForDay } from '../src/tags.ts';
+import { ensureTagged } from '../src/tagger.ts';
+import type { GenerateDigestRequest, RudderSettings } from '../src/api-contract.ts';
 
 // This is a batching debounce, not an agent-call timeout.
 const PROMPT_NOTIFY_DEBOUNCE_MS = 5000;

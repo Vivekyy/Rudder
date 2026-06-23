@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { rudderClient } from '../renderer/rudder-client.ts';
 import type { DigestResult } from '../src/digest.ts';
-import type { RudderSettings } from '../src/desktop-api.ts';
+import type { RudderSettings } from '../src/api-contract.ts';
 import type { HookStatus } from '../src/install.ts';
 import type { DayStats } from '../src/tags.ts';
 

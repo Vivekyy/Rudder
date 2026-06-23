@@ -8,7 +8,6 @@ local SQLite DB in the app data directory.
 ## Layout
 
 - `src/` — shared TypeScript services used by Electron, hooks, and tests.
-  - `core.ts` — shared export surface for app/core callers.
   - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
   - `hooks.ts` — Claude/Codex capture hooks; best-effort `/notify` ping to the dashboard.
   - `classify.ts` — the single source of truth for the category/reaction rubric.
@@ -16,7 +15,7 @@ local SQLite DB in the app data directory.
   - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
   - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
   - `digest.ts` — renders the Markdown digest; numbers come from `statsForDay`, the LLM only writes prose.
-  - `desktop-api.ts` — typed preload/renderer API contract.
+  - `api-contract.ts` — typed preload/renderer API contract.
   - `settings.ts` — app-data settings for agent path/PATH cache.
   - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
   - `install.ts` — hook install/status helpers for the desktop app.
