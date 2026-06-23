@@ -1,25 +1,16 @@
-See [AGENTS.md](./AGENTS.md) for development, pull request, and npm publishing
+See [AGENTS.md](./AGENTS.md) for development, pull request, and desktop packaging
 instructions. It is the single source of truth for how to work in this repo.
 
 Quick reference:
 
 - Run `/check` (or `npm run typecheck`, `npm test`, `npm run build`) before committing.
 - Branch off `main`; never commit directly to `main`.
-- Bump the version in the same PR as a user-facing change
-  (`npm version patch --no-git-tag-version`).
 - After opening a PR, use `/address-pr-comments` to triage review feedback.
-- **Publishing is automatic on merge to `main`.** `.github/workflows/publish.yml`
-  runs on every push to `main`: if `package.json`'s version has no matching
-  `v<version>` tag yet, it publishes to npm via OIDC and then pushes the tag. Just
-  land the version bump — no manual tagging. (Forgetting to bump = no publish.)
-  Tests run separately in `.github/workflows/test.yml`.
-- **PRs that bump the version get a release alert.**
-  `.github/workflows/release-alert.yml` posts a sticky PR comment when merging
-  will publish a new release (mirrors `publish.yml`'s tag check), so a version
-  bump never lands unnoticed.
-- Path-resolving code must work in both the `.ts` dev tree and the compiled
-  `.js` under `dist/` — see the `rudderArgv()` note in AGENTS.md.
-- The dashboard (`rudder start`) and the digest read the **same** per-prompt tags
+- `.github/workflows/publish.yml` builds desktop artifacts on `main`; it no longer
+  publishes the npm package.
+- Hook path code should use the packaged Electron app's `--rudder-hook` mode.
+  See the `electronHookArgv()` notes in AGENTS.md.
+- The dashboard and the digest read the **same** per-prompt tags
   (`prompt_tags` / `statsForDay`), so their numbers always agree. Tagging is
   out-of-band (never in the capture hook) and uses the shared rubric in
   `classify.ts`. Bump `TAGGER_VERSION` to re-tag history. See the "Stats pipeline"

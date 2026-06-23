@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 let home: string;
 
@@ -34,35 +34,6 @@ test('insertPrompt stores and queries by local day; blanks are skipped', async (
   assert.equal(rows[0].prompt, 'Fix the deploy'); // trimmed
   assert.equal(rows[0].source, 'claude');
   assert.equal(rows[0].project, 'archer');
-});
-
-test('rudderArgv points at a bin file that actually exists', async () => {
-  const { existsSync } = await import('node:fs');
-  const { rudderArgv } = await import('../src/install.ts');
-
-  const argv = rudderArgv(['hook', 'claude']);
-  assert.equal(argv[0], process.execPath);
-  assert.equal(argv[2], 'hook');
-  assert.equal(argv[3], 'claude');
-  // This test runs from the `.ts` source tree, so it only guards the dev path:
-  // the bin must resolve to a real file on disk. The published `.js` build is
-  // covered separately below, since it can't be exercised without a build.
-  assert.ok(existsSync(argv[1]), `rudder bin should exist at ${argv[1]}`);
-});
-
-test('rudderBinPath matches the bin extension to the loading module', async () => {
-  const { rudderBinPath } = await import('../src/install.ts');
-  const { pathToFileURL } = await import('node:url');
-  const { join } = await import('node:path');
-
-  // Dev `.ts` checkout: src/install.ts ↔ bin/rudder.ts.
-  const tsUrl = pathToFileURL(join('/repo', 'src', 'install.ts')).href;
-  assert.equal(rudderBinPath(tsUrl), join('/repo', 'bin', 'rudder.ts'));
-
-  // Published `.js` build: dist/src/install.js ↔ dist/bin/rudder.js — the path
-  // that had the original "hook points at a nonexistent file" bug.
-  const jsUrl = pathToFileURL(join('/repo', 'dist', 'src', 'install.js')).href;
-  assert.equal(rudderBinPath(jsUrl), join('/repo', 'dist', 'bin', 'rudder.js'));
 });
 
 test('claude hook parses stdin JSON into a row', async () => {
@@ -173,6 +144,28 @@ test('parseTags tolerates fences/prose and normalizes categories', async () => {
   assert.deepEqual(parseTags('no array here'), []);
 });
 
+test('mergePathValues preserves order and de-duplicates PATH entries', async () => {
+  const { mergePathValues } = await import('../src/agent.ts');
+  const merged = mergePathValues(
+    ['/usr/bin', '/opt/homebrew/bin'].join(delimiter),
+    ['/opt/homebrew/bin', '/usr/local/bin', ''].join(delimiter),
+    undefined,
+    '/usr/bin'
+  );
+
+  assert.deepEqual(merged.split(delimiter), ['/usr/bin', '/opt/homebrew/bin', '/usr/local/bin']);
+});
+
+test('desktop settings stores and clears a manual agent path', async () => {
+  const { agentPath, setAgentPath } = await import('../src/settings.ts');
+
+  setAgentPath('/opt/homebrew/bin/claude');
+  assert.equal(agentPath(), '/opt/homebrew/bin/claude');
+
+  setAgentPath('   ');
+  assert.equal(agentPath(), null);
+});
+
 test('pngIcon emits a valid PNG of the requested size', async () => {
   const { pngIcon } = await import('../src/icon.ts');
   const png = pngIcon(192);
@@ -185,14 +178,19 @@ test('pngIcon emits a valid PNG of the requested size', async () => {
   assert.equal(pngIcon(192), png);
 });
 
-test('PWA manifest is installable and the service worker has a fetch handler', async () => {
-  const { MANIFEST, SERVICE_WORKER } = await import('../src/ui.ts');
-  const m = JSON.parse(MANIFEST);
-  assert.equal(m.display, 'standalone');
-  assert.ok(m.start_url);
-  const sizes = m.icons.map((i: { sizes: string }) => i.sizes);
-  assert.ok(sizes.includes('192x192') && sizes.includes('512x512'), 'needs 192 + 512 icons');
-  assert.match(SERVICE_WORKER, /addEventListener\("fetch"/);
+test('electron hook argv uses the app executable in hook mode', async () => {
+  const { electronHookArgv } = await import('../src/install.ts');
+  assert.deepEqual(electronHookArgv('/Applications/Rudder.app/Contents/MacOS/Rudder', ['hook', 'claude']), [
+    '/Applications/Rudder.app/Contents/MacOS/Rudder',
+    '--rudder-hook',
+    'claude',
+  ]);
+  assert.deepEqual(electronHookArgv('/repo/node_modules/.bin/electron', ['hook', 'codex'], '/repo/dist/electron/main.js'), [
+    '/repo/node_modules/.bin/electron',
+    '/repo/dist/electron/main.js',
+    '--rudder-hook',
+    'codex',
+  ]);
 });
 
 test('codex hook reads the notify JSON arg (agent-turn-complete only)', async () => {

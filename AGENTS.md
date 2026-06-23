@@ -1,12 +1,13 @@
 # Working in this repo
 
-Rudder records the prompts you give your AI coding assistants and turns a day's
-worth of them into a readable digest. It installs hooks into Claude Code and
-Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
+Rudder is a local-first Electron app that records the prompts you give your AI
+coding assistants and turns a day's worth of them into live stats and a readable
+digest. It installs hooks into Claude Code and Codex that log each prompt to a
+local SQLite DB in the app data directory.
 
 ## Layout
 
-- `src/` — TypeScript sources (run directly via Node's type stripping in dev).
+- `src/` — shared TypeScript services used by Electron, hooks, and tests.
   - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
   - `hooks.ts` — Claude/Codex capture hooks; best-effort `/notify` ping to the dashboard.
   - `classify.ts` — the single source of truth for the category/reaction rubric.
@@ -14,13 +15,13 @@ Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
   - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
   - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
   - `digest.ts` — renders the Markdown digest; numbers come from `statsForDay`, the LLM only writes prose.
-  - `serve.ts` / `ui.ts` — the `rudder start` daemon and its inlined dashboard page
-    (also a PWA: `ui.ts` exports the manifest + service worker, served by `serve.ts`).
+  - `api-contract.ts` — typed preload/renderer API contract.
+  - `settings.ts` — app-data settings for agent path/PATH cache.
   - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
-  - `install.ts` — `rudder init` (DB + hook wiring).
-- `bin/rudder.ts` — CLI entry point.
-- `dist/` — compiled output, the only code that ships (see `files` in `package.json`).
-  Dev runs `bin/rudder.ts`; the published package runs `dist/bin/rudder.js`.
+  - `install.ts` — hook install/status helpers for the desktop app.
+- `electron/` — Electron main/preload/API entrypoints. Main owns app lifecycle and hook mode; `api.ts` owns IPC and the notify endpoint.
+- `app/` / `renderer/` — Next.js React renderer and desktop client adapter.
+- `dist/` — compiled Node/Electron output. `out/` is the exported Next.js renderer.
 - `test/` — `node --test` suites.
 
 ## Stats pipeline (dashboard + digest)
@@ -32,15 +33,15 @@ dashboard and the digest can never disagree:
   `category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
   (agree/disagree/none), using the shared rubric in `classify.ts`.
 - Tagging is **out-of-band**, never in the capture hook: the hook inserts the
-  prompt and fires a best-effort `POST /notify` at the `rudder start` daemon,
-  which debounces (~1.5s) and batches a single agent call. If the daemon is down,
-  the prompt is just left untagged and backfilled by the next `rudder start`,
-  `rudder tag`, or `rudder digest`.
+  prompt and fires a best-effort `POST /notify` at the running desktop app,
+  which debounces (~5s) and batches a single agent call. If the app is down,
+  the prompt is just left untagged and backfilled by the next app startup or
+  digest generation.
 - `statsForDay()` aggregates tags into percentages (untagged rows count as
   `ignored` and are excluded from the denominator, so the four percentages sum
-  to ~100% of counted prompts). `rudder digest` calls
-  `ensureTagged` then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those
-  exact numbers — the LLM is told not to reclassify or recompute.
+  to ~100% of counted prompts). Desktop digest generation calls `ensureTagged`
+  then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those exact numbers —
+  the LLM is told not to reclassify or recompute.
 - `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
   older version count as untagged and get reclassified). Bump it whenever the
   rubric or prompt rendering changes in a way that should re-tag history.
@@ -50,23 +51,23 @@ dashboard and the digest can never disagree:
 ## Local development
 
 ```
-npm install        # install dev deps (typescript, @types/node, ...)
-npm run typecheck   # tsc --noEmit
-npm test            # node --test
-npm run build       # rm -rf dist && tsc -p tsconfig.build.json
+npm install          # install dev deps
+npm run typecheck    # tsc --noEmit
+npm test             # node --test test/*.ts (requires Node >= 23.6)
+npm run build        # compile Electron/main code and export the Next renderer
+npm run package      # build desktop packages with electron-builder
 ```
 
-Always run `npm run typecheck` and `npm test` before committing. `prepublishOnly`
-runs typecheck + test + build, so a broken tree cannot be published.
+Always run `npm run typecheck` and `npm test` before committing. Use `npm run
+build` for app-level validation before opening a PR.
 
-### Gotcha: dev vs. published paths
+### Gotcha: hook paths
 
-Code that resolves file paths relative to itself must work in **both** layouts:
-the `.ts` source tree (dev) and the compiled `.js` under `dist/` (published).
-`rudderArgv()` in `src/install.ts` is the canonical example — it derives the bin
-extension from the running module so `rudder init` writes a hook pointing at a
-file that actually exists in each case. Mismatching this silently breaks prompt
-capture (the hook fails and the fail-safe wrapper swallows the error).
+Hook paths must point at a stable executable. The desktop app uses
+`electronHookArgv()` so packaged hooks run the app executable in
+`--rudder-hook claude|codex` mode without opening a window. Mismatching this
+silently breaks prompt capture because the fail-safe wrapper swallows hook
+errors.
 
 ## Pull request process
 
@@ -74,11 +75,8 @@ capture (the hook fails and the fail-safe wrapper swallows the error).
 2. Make the change; run the package checks via the `check-changed-folders` skill
    (Codex equivalent of `/check`) — or directly: `npm run typecheck`, `npm test`,
    `npm run build`.
-3. If the change is user-facing or fixes a bug, bump the version in the same PR:
-   `npm version patch --no-git-tag-version` (use `--no-git-tag-version` so the
-   tag is cut later from `main`, not from the feature branch).
-4. Commit, push, and open a PR with `gh pr create --base main`.
-5. After the PR opens, address any review comments with the `address-pr-comments`
+3. Commit, push, and open a PR with `gh pr create --base main`.
+4. After the PR opens, address any review comments with the `address-pr-comments`
    skill (Codex equivalent of `/address-pr-comments`).
 
 ## Continuous integration
@@ -86,60 +84,21 @@ capture (the hook fails and the fail-safe wrapper swallows the error).
 `.github/workflows/test.yml` runs `npm ci`, `npm run typecheck`, `npm test`, and
 `npm run build` on every push. It is the gate that keeps `main` green; make it a
 **required status check** in branch protection so untested code can't merge.
-Testing deliberately lives here, separate from the publish flow (the archer
-`testing.yml` split) — `publish.yml` only builds and publishes.
-
-`.github/workflows/release-alert.yml` runs on every PR targeting `main` and posts
-a **sticky PR comment** when merging will publish a new release. It mirrors
-`publish.yml`'s exact condition — it reads the version from the PR branch's
-`package.json` and checks whether a `v<version>` tag already exists; if not, the
-comment warns that merging will ship `@vivekyy/rudder@<version>` to npm (and flips
-to a "no release on merge" note if the version isn't bumped). The comment is
-updated in place on each push (via a hidden `<!-- release-alert -->` marker) rather
-than duplicated.
-
-## Publishing to npm
-
-Publishing is **automatic on merge to `main`** — there is no manual tagging step.
-`.github/workflows/publish.yml` runs on every push to `main` as a single job whose
-steps:
-
-1. compute `v<version>` from `package.json`; if that tag already exists →
-   **no-op** (the merge didn't bump the version).
-2. otherwise `npm ci` then `npm publish` via a **Trusted Publisher (OIDC)** — there
-   is no `NPM_TOKEN` secret. The release path does **not** run tests itself — that's
-   `test.yml`'s job (see CI above). `npm publish` still runs `prepublishOnly`
-   (typecheck + test + build) as an intrinsic guard, so a broken tree can't ship.
-3. push the `v<version>` tag as the "shipped" marker, **after** a successful
-   publish (so a failed publish leaves no tag and a re-run retries cleanly).
-
-So the only way to release is to land a version bump (`npm version patch
---no-git-tag-version`, see the PR process) on `main`. Forgetting to bump means
-nothing publishes (safe); you can never accidentally skip the publish after a bump.
-
-After a version-bump PR merges, verify the `Publish to npm` workflow succeeded and
-`npm view @vivekyy/rudder version` reflects the new release.
-
-Notes:
-- **The OIDC workflow is `publish.yml`** (unchanged from before). The Trusted
-  Publisher at npmjs.com -> package -> Settings -> Trusted Publisher must name
-  `publish.yml` — which is what it already is, so no reconfiguration is needed.
-- The git tag is created **after a successful publish**, so it is a marker, not the
-  trigger. Do **not** push `v*` tags by hand — and never run `npm version patch` on
-  `main` (it would bump a second time).
-- If a publish ever fails midway (e.g. a transient npm error), no tag is written;
-  re-run `Publish to npm` from the Actions tab (`workflow_dispatch`) and it retries.
+`.github/workflows/publish.yml` is now a desktop packaging workflow. On pushes to
+`main` it runs `npm run package -- --linux AppImage --publish never` and uploads
+the generated files from `release/` as workflow artifacts. It does not publish an
+npm package.
 
 ## Installing / re-wiring hooks
 
-`rudder init` creates the DB and installs the Claude Code `UserPromptSubmit` hook
-(`~/.claude/settings.json`) and the Codex `notify` program (`~/.codex/config.toml`).
-Both point at the absolute bin path of the rudder that ran `init`.
+The desktop app's setup panel creates the DB and installs the Claude Code
+`UserPromptSubmit` hook (`~/.claude/settings.json`) and the Codex `notify`
+program (`~/.codex/config.toml`). Both point at the packaged Rudder executable in
+hook mode.
 
 Because each Conductor/git worktree is a separate checkout but `~/.claude/settings.json`
-is global, a hook pointing into a specific worktree breaks once that worktree is
-deleted. Prefer a **global install** (`npm i -g @vivekyy/rudder`) so the hook
-points at a stable path (`/opt/homebrew/bin/rudder`) that survives worktree churn.
+is global, hooks must not point into a throwaway checkout. Prefer the packaged app
+or another stable executable path.
 
 ## Skills
 

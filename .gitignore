@@ -3,6 +3,9 @@ node_modules/
 
 # Build output
 dist/
+.next/
+out/
+release/
 *.tsbuildinfo
 
 # Generated

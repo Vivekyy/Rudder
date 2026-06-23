@@ -1,16 +1,17 @@
 {
   "name": "@vivekyy/rudder",
   "version": "0.2.0",
-  "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
+  "description": "A local-first desktop app for AI coding prompts, stats, and daily digests.",
+  "private": true,
+  "desktopName": "Rudder",
   "type": "module",
-  "bin": {
-    "rudder": "dist/bin/rudder.js"
-  },
+  "main": "dist/electron/main.js",
   "engines": {
     "node": ">=23.6.0"
   },
   "files": [
     "dist",
+    "out",
     "README.md",
     "LICENSE"
   ],
@@ -21,7 +22,8 @@
     "codex",
     "prompts",
     "digest",
-    "cli",
+    "electron",
+    "nextjs",
     "productivity",
     "developer-tools"
   ],
@@ -35,21 +37,64 @@
   "bugs": {
     "url": "https://github.com/Vivekyy/Rudder/issues"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "node --test",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "build:main": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build:renderer": "next build",
+    "build": "rm -rf dist out .next && npm run build:main && npm run build:renderer",
+    "dev:renderer": "next dev",
+    "dev:electron": "npm run build:main && RUDDER_RENDERER_URL=http://localhost:3000 electron dist/electron/main.js",
+    "package": "npm run build && electron-builder",
+    "test": "node --test test/*.ts",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "build": {
+    "appId": "com.vivekyy.rudder",
+    "productName": "Rudder",
+    "executableName": "rudder",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "out/**/*",
+      "package.json",
+      "LICENSE",
+      "README.md"
+    ],
+    "extraMetadata": {
+      "main": "dist/electron/main.js"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "syncDesktopName": true
+    },
+    "win": {
+      "target": "nsis"
+    }
   },
   "dependencies": {
+    "fix-path": "^5.0.0",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
     "@types/node": "^24",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@types/shell-quote": "^1.7.5",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3",
+    "node": "^26.3.1",
     "typescript": "^5.7.0"
   }
 }
