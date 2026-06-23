@@ -20,16 +20,24 @@ function localDay(): string {
 }
 
 export default function Home() {
-  const client = useMemo(() => rudderClient(), []);
+  const client = useMemo(() => {
+    try {
+      return rudderClient();
+    } catch {
+      return null;
+    }
+  }, []);
   const [day, setDay] = useState(localDay());
   const [stats, setStats] = useState<DayStats | null>(null);
   const [settings, setSettings] = useState<RudderSettings | null>(null);
   const [hooks, setHooks] = useState<HookStatus | null>(null);
   const [digest, setDigest] = useState<DigestResult | null>(null);
+  const [agentPath, setAgentPath] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh(selectedDay = day) {
+    if (!client) throw new Error('Rudder desktop bridge is unavailable. Open this UI from the desktop app.');
     const [nextStats, nextSettings, nextHooks] = await Promise.all([
       client.getStats(selectedDay),
       client.getSettings(),
@@ -37,17 +45,20 @@ export default function Home() {
     ]);
     setStats(nextStats);
     setSettings(nextSettings);
+    setAgentPath(nextSettings.agentPath ?? '');
     setHooks(nextHooks);
   }
 
   useEffect(() => {
     refresh().catch((err: Error) => setError(err.message));
+    if (!client) return;
     return client.onStatsUpdated((next) => {
       if (next.day === day) setStats(next);
     });
   }, [client, day]);
 
   async function installHooks() {
+    if (!client) return;
     setBusy(true);
     setError(null);
     try {
@@ -60,7 +71,23 @@ export default function Home() {
     }
   }
 
+  async function saveAgentPath() {
+    if (!client) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const nextSettings = await client.setAgentPath(agentPath);
+      setSettings(nextSettings);
+      setAgentPath(nextSettings.agentPath ?? '');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generate() {
+    if (!client) return;
     setBusy(true);
     setError(null);
     try {
@@ -147,6 +174,18 @@ export default function Home() {
               <b>Agent</b>
               <span className="settingValue">{settings?.agent ?? 'not found'}</span>
             </div>
+            <label className="subtle" htmlFor="agentPath">
+              Claude or Codex executable path
+            </label>
+            <input
+              id="agentPath"
+              placeholder="/opt/homebrew/bin/claude"
+              value={agentPath}
+              onChange={(event) => setAgentPath(event.target.value)}
+            />
+            <button disabled={busy} onClick={saveAgentPath}>
+              Save Agent Path
+            </button>
             <div className="settingRow">
               <b>Database</b>
               <span className="settingValue">{settings?.dbPath ?? 'loading'}</span>

@@ -1,13 +1,12 @@
 import type { Agent, DigestResult } from './digest.ts';
 import type { DayStats } from './tags.ts';
 import type { HookStatus, InstallResult } from './install.ts';
-import type { MigrationResult } from './db.ts';
 
 export interface RudderSettings {
   dbPath: string;
   userDataPath: string;
-  migration: MigrationResult;
   agent: Agent | null;
+  agentPath: string | null;
 }
 
 export interface GenerateDigestRequest {
@@ -22,6 +21,7 @@ export interface RudderDesktopApi {
   installHooks(): Promise<InstallResult>;
   getHookStatus(): Promise<HookStatus>;
   getSettings(): Promise<RudderSettings>;
+  setAgentPath(path?: string): Promise<RudderSettings>;
   onStatsUpdated(callback: (stats: DayStats) => void): () => void;
 }
 

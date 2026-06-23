@@ -30,7 +30,6 @@
   },
   "include": [
     "next-env.d.ts",
-    "bin/**/*.ts",
     "src/**/*.ts",
     "electron/**/*.ts",
     "app/**/*.tsx",

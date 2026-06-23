@@ -3,14 +3,13 @@
 Rudder is a local-first Electron app that records the prompts you give your AI
 coding assistants and turns a day's worth of them into live stats and a readable
 digest. It installs hooks into Claude Code and Codex that log each prompt to a
-local SQLite DB in the app data directory, migrating old `~/.rudder/rudder.db`
-data on first launch.
+local SQLite DB in the app data directory.
 
 ## Layout
 
 - `src/` — shared TypeScript services used by Electron, hooks, and tests.
   - `core.ts` — shared export surface for app/core callers.
-  - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, app-data migration, `rudderPort()`.
+  - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
   - `hooks.ts` — Claude/Codex capture hooks; best-effort `/notify` ping to the dashboard.
   - `classify.ts` — the single source of truth for the category/reaction rubric.
   - `tagger.ts` — classifies untagged prompts via the agent CLI (`ensureTagged`/`tagDay`).
@@ -18,12 +17,11 @@ data on first launch.
   - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
   - `digest.ts` — renders the Markdown digest; numbers come from `statsForDay`, the LLM only writes prose.
   - `desktop-api.ts` — typed preload/renderer API contract.
-  - `serve.ts` / `ui.ts` — legacy localhost dashboard pieces kept for compatibility during migration.
+  - `settings.ts` — app-data settings for agent path/PATH cache.
   - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
-  - `install.ts` — hook install/status helpers for the desktop app and legacy CLI.
-- `electron/` — Electron main/preload entrypoints. Main owns SQLite, hook mode, IPC, and the notify endpoint.
-- `app/` / `renderer/` — Next.js React renderer and portable client adapter.
-- `bin/rudder.ts` — legacy/internal CLI entry point.
+  - `install.ts` — hook install/status helpers for the desktop app.
+- `electron/` — Electron main/preload/API entrypoints. Main owns app lifecycle and hook mode; `api.ts` owns IPC and the notify endpoint.
+- `app/` / `renderer/` — Next.js React renderer and desktop client adapter.
 - `dist/` — compiled Node/Electron output. `out/` is the exported Next.js renderer.
 - `test/` — `node --test` suites.
 
@@ -37,14 +35,14 @@ dashboard and the digest can never disagree:
   (agree/disagree/none), using the shared rubric in `classify.ts`.
 - Tagging is **out-of-band**, never in the capture hook: the hook inserts the
   prompt and fires a best-effort `POST /notify` at the running desktop app,
-  which debounces (~1.5s) and batches a single agent call. If the daemon is down,
+  which debounces (~5s) and batches a single agent call. If the app is down,
   the prompt is just left untagged and backfilled by the next app startup or
   digest generation.
 - `statsForDay()` aggregates tags into percentages (untagged rows count as
   `ignored` and are excluded from the denominator, so the four percentages sum
-  to ~100% of counted prompts). `rudder digest` calls
-  `ensureTagged` then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those
-  exact numbers — the LLM is told not to reclassify or recompute.
+  to ~100% of counted prompts). Desktop digest generation calls `ensureTagged`
+  then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those exact numbers —
+  the LLM is told not to reclassify or recompute.
 - `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
   older version count as untagged and get reclassified). Bump it whenever the
   rubric or prompt rendering changes in a way that should re-tag history.
@@ -66,11 +64,11 @@ build` for app-level validation before opening a PR.
 
 ### Gotcha: hook paths
 
-Hook paths must point at a stable executable. The legacy CLI still uses
-`rudderArgv()`, while the Electron app uses `electronHookArgv()` so packaged hooks
-run the app executable in `--rudder-hook claude|codex` mode without opening a
-window. Mismatching this silently breaks prompt capture because the fail-safe
-wrapper swallows hook errors.
+Hook paths must point at a stable executable. The desktop app uses
+`electronHookArgv()` so packaged hooks run the app executable in
+`--rudder-hook claude|codex` mode without opening a window. Mismatching this
+silently breaks prompt capture because the fail-safe wrapper swallows hook
+errors.
 
 ## Pull request process
 
@@ -97,7 +95,7 @@ npm package.
 The desktop app's setup panel creates the DB and installs the Claude Code
 `UserPromptSubmit` hook (`~/.claude/settings.json`) and the Codex `notify`
 program (`~/.codex/config.toml`). Both point at the packaged Rudder executable in
-hook mode. The legacy `rudder init` path remains for compatibility.
+hook mode.
 
 Because each Conductor/git worktree is a separate checkout but `~/.claude/settings.json`
 is global, hooks must not point into a throwaway checkout. Prefer the packaged app

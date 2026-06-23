@@ -8,18 +8,13 @@ stats and a readable daily digest.
 
 ## Status
 
-Rudder is migrating from a global npm CLI package to a downloadable
-React/Electron app. The desktop app now owns the main product flow:
+Rudder is a downloadable React/Electron app. The desktop app owns the full
+product flow:
 
 - Claude Code and Codex hooks capture prompts locally.
 - SQLite state lives in the Electron app data directory.
-- Existing `~/.rudder/rudder.db` data is migrated on first app launch.
 - The dashboard is a Next.js React renderer running inside Electron.
-- The renderer is structured so it can later be hosted on Vercel with a local
-  bridge or demo/web adapter.
-
-The legacy CLI entry point remains for compatibility while the desktop app
-becomes the primary distribution.
+- Agent lookup uses the desktop bridge only; there is no hosted web fallback.
 
 ## How It Works
 
@@ -78,6 +73,5 @@ Prompt rows are stored in plaintext in the local SQLite database with timestamp,
 local day, source, session id, working directory, project, prompt text, model,
 and raw hook payload. Prompt tags are stored beside them in `prompt_tags`.
 
-Rudder does not upload prompt data. A future Vercel-hosted renderer can display a
-web shell or demo, but live user stats require the local desktop app or an
-explicit local bridge/cloud sync design.
+Rudder does not upload prompt data. Live stats and digests run through the local
+desktop app.

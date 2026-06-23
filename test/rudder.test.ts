@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
@@ -34,35 +34,6 @@ test('insertPrompt stores and queries by local day; blanks are skipped', async (
   assert.equal(rows[0].prompt, 'Fix the deploy'); // trimmed
   assert.equal(rows[0].source, 'claude');
   assert.equal(rows[0].project, 'archer');
-});
-
-test('rudderArgv points at a bin file that actually exists', async () => {
-  const { existsSync } = await import('node:fs');
-  const { rudderArgv } = await import('../src/install.ts');
-
-  const argv = rudderArgv(['hook', 'claude']);
-  assert.equal(argv[0], process.execPath);
-  assert.equal(argv[2], 'hook');
-  assert.equal(argv[3], 'claude');
-  // This test runs from the `.ts` source tree, so it only guards the dev path:
-  // the bin must resolve to a real file on disk. The published `.js` build is
-  // covered separately below, since it can't be exercised without a build.
-  assert.ok(existsSync(argv[1]), `rudder bin should exist at ${argv[1]}`);
-});
-
-test('rudderBinPath matches the bin extension to the loading module', async () => {
-  const { rudderBinPath } = await import('../src/install.ts');
-  const { pathToFileURL } = await import('node:url');
-  const { join } = await import('node:path');
-
-  // Dev `.ts` checkout: src/install.ts ↔ bin/rudder.ts.
-  const tsUrl = pathToFileURL(join('/repo', 'src', 'install.ts')).href;
-  assert.equal(rudderBinPath(tsUrl), join('/repo', 'bin', 'rudder.ts'));
-
-  // Published `.js` build: dist/src/install.js ↔ dist/bin/rudder.js — the path
-  // that had the original "hook points at a nonexistent file" bug.
-  const jsUrl = pathToFileURL(join('/repo', 'dist', 'src', 'install.js')).href;
-  assert.equal(rudderBinPath(jsUrl), join('/repo', 'dist', 'bin', 'rudder.js'));
 });
 
 test('claude hook parses stdin JSON into a row', async () => {
@@ -185,6 +156,16 @@ test('mergePathValues preserves order and de-duplicates PATH entries', async () 
   assert.deepEqual(merged.split(delimiter), ['/usr/bin', '/opt/homebrew/bin', '/usr/local/bin']);
 });
 
+test('desktop settings stores and clears a manual agent path', async () => {
+  const { agentPath, setAgentPath } = await import('../src/settings.ts');
+
+  setAgentPath('/opt/homebrew/bin/claude');
+  assert.equal(agentPath(), '/opt/homebrew/bin/claude');
+
+  setAgentPath('   ');
+  assert.equal(agentPath(), null);
+});
+
 test('pngIcon emits a valid PNG of the requested size', async () => {
   const { pngIcon } = await import('../src/icon.ts');
   const png = pngIcon(192);
@@ -195,28 +176,6 @@ test('pngIcon emits a valid PNG of the requested size', async () => {
   assert.equal(png.readUInt32BE(20), 192);
   // Memoized: same buffer instance on a second call.
   assert.equal(pngIcon(192), png);
-});
-
-test('legacy database migration copies the db and only runs once', async () => {
-  const { migrateLegacyDb } = await import('../src/db.ts');
-  const legacy = mkdtempSync(join(tmpdir(), 'rudder-legacy-'));
-  const target = mkdtempSync(join(tmpdir(), 'rudder-target-'));
-  try {
-    writeFileSync(join(legacy, 'rudder.db'), 'legacy-db');
-    writeFileSync(join(legacy, 'rudder.db-wal'), 'legacy-wal');
-
-    const first = migrateLegacyDb(target, legacy);
-    assert.equal(first.migrated, true);
-    assert.ok(existsSync(join(target, 'rudder.db')));
-    assert.ok(existsSync(join(target, 'rudder.db-wal')));
-
-    const second = migrateLegacyDb(target, legacy);
-    assert.equal(second.migrated, false);
-    assert.equal(second.reason, 'already-initialized');
-  } finally {
-    rmSync(legacy, { recursive: true, force: true });
-    rmSync(target, { recursive: true, force: true });
-  }
 });
 
 test('electron hook argv uses the app executable in hook mode', async () => {

@@ -3,12 +3,10 @@ export {
   dbPath,
   insertPrompt,
   localDay,
-  migrateLegacyDb,
   openDb,
   promptsForDay,
   rudderHome,
   rudderPort,
-  type MigrationResult,
   type NewPrompt,
   type PromptRow,
   type Source,
@@ -24,14 +22,13 @@ export {
 } from './tags.ts';
 export { ensureTagged, parseTags, tagDay, type ParsedTag } from './tagger.ts';
 export { generateDigest, type Agent, type DigestOptions, type DigestResult } from './digest.ts';
-export { resolveAgent, runAgent } from './agent.ts';
+export { resetAgentPathCache, resolveAgent, runAgent } from './agent.ts';
 export { claudeHook, codexHook } from './hooks.ts';
+export { agentPath, setAgentPath } from './settings.ts';
 export {
   electronHookArgv,
   hookStatus,
   installHooks,
-  rudderArgv,
-  rudderBinPath,
   type HookArgvProvider,
   type HookStatus,
   type InstallResult,

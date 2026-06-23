@@ -1,35 +1,10 @@
 import { homedir } from 'node:os';
-import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { quote } from 'shell-quote';
 import { openDb, dbPath } from './db.ts';
 
-/**
- * Resolve the rudder bin path for the module at `moduleUrl`, matching the bin's
- * extension to however that module was loaded: a dev checkout runs the `.ts`
- * sources directly (src/install.ts ↔ bin/rudder.ts), while a built/published
- * install runs the compiled `.js` (dist/src/install.js ↔ dist/bin/rudder.js).
- * Hardcoding `.ts` made `rudder init` write a hook pointing at a file that
- * doesn't exist in the published package. Takes the URL as an argument so the
- * `.js` branch is testable without an actual build.
- */
-export function rudderBinPath(moduleUrl: string): string {
-  const here = fileURLToPath(moduleUrl);
-  const ext = here.endsWith('.ts') ? 'ts' : 'js';
-  return resolve(dirname(here), '..', 'bin', `rudder.${ext}`);
-}
-
-/**
- * The argv another tool should run to invoke a rudder hook. We point at the
- * absolute bin path with the current node binary so it works whether or not
- * `rudder` is on PATH (dev checkouts and global installs alike). Returned as an
- * array so callers never have to re-split a path that may contain spaces.
- */
-export function rudderArgv(sub: string[]): string[] {
-  return [process.execPath, rudderBinPath(import.meta.url), ...sub];
-}
-
+/** Supplied by Electron main so hook installers write the current app executable. */
 export type HookArgvProvider = (sub: string[]) => string[];
 
 export interface InstallResult {
@@ -92,7 +67,7 @@ function installCodexHook(argvForSub: HookArgvProvider): string {
   mkdirSync(dirname(configPath), { recursive: true });
 
   const argv = argvForSub(['hook', 'codex']);
-  // TOML array of strings: ["/abs/node", "/abs/rudder.ts", "hook", "codex"]
+  // TOML array of strings: ["/Applications/Rudder", "--rudder-hook", "codex"]
   const notifyLine = `notify = [${argv.map((p) => JSON.stringify(p)).join(', ')}]`;
 
   let content = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
@@ -117,13 +92,15 @@ export function electronHookArgv(
   sub: string[],
   appEntryPath?: string
 ): string[] {
+  // Both Claude and Codex hooks point at the same app executable; the final arg
+  // selects which hook parser runs inside `--rudder-hook` mode.
   const hook = sub[0] === 'hook' ? sub.slice(1) : sub;
   return appEntryPath
     ? [executablePath, appEntryPath, '--rudder-hook', ...hook]
     : [executablePath, '--rudder-hook', ...hook];
 }
 
-export function hookStatus(argvForSub: HookArgvProvider = rudderArgv): HookStatus {
+export function hookStatus(argvForSub: HookArgvProvider): HookStatus {
   const claudePath = join(homedir(), '.claude', 'settings.json');
   const codexPath = join(homedir(), '.codex', 'config.toml');
   const claudeContent = existsSync(claudePath) ? readFileSync(claudePath, 'utf8') : '';
@@ -136,20 +113,11 @@ export function hookStatus(argvForSub: HookArgvProvider = rudderArgv): HookStatu
   };
 }
 
-export function installHooks(argvForSub: HookArgvProvider = rudderArgv): InstallResult {
+export function installHooks(argvForSub: HookArgvProvider): InstallResult {
   openDb();
   return {
     database: dbPath(),
     claude: installClaudeHook(argvForSub),
     codex: installCodexHook(argvForSub),
   };
-}
-
-export function init(): void {
-  const result = installHooks();
-  console.log(`rudder: database ready → ${result.database}`);
-  console.log(`rudder: claude hook  ${result.claude}`);
-  console.log(`rudder: codex hook   ${result.codex}`);
-  console.log('\nDone. New prompts in Claude Code and Codex will now be recorded.');
-  console.log('Run `rudder digest` at the end of the day to summarize your work.');
 }

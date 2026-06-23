@@ -9,6 +9,7 @@ const api: RudderDesktopApi = {
   installHooks: () => ipcRenderer.invoke('rudder:install-hooks'),
   getHookStatus: () => ipcRenderer.invoke('rudder:get-hook-status'),
   getSettings: () => ipcRenderer.invoke('rudder:get-settings'),
+  setAgentPath: (path?: string) => ipcRenderer.invoke('rudder:set-agent-path', path),
   onStatsUpdated: (callback: (stats: DayStats) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, stats: DayStats) => callback(stats);
     ipcRenderer.on('rudder:stats-updated', listener);

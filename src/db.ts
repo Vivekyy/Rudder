@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 
 export type Source = 'claude' | 'codex';
 
@@ -49,45 +49,6 @@ export function dbPath(): string {
 }
 
 let _db: DatabaseSync | null = null;
-
-export interface MigrationResult {
-  migrated: boolean;
-  from: string;
-  to: string;
-  reason?: string;
-}
-
-/**
- * Copy an existing pre-Electron database into the app-owned data directory once.
- * Sidecar WAL/SHM files are copied when present so a recently-used DB remains
- * consistent after migration.
- */
-export function migrateLegacyDb(
-  targetHome: string = rudderHome(),
-  legacyHome: string = join(homedir(), '.rudder')
-): MigrationResult {
-  const legacyDb = join(legacyHome, 'rudder.db');
-  const targetDb = join(targetHome, 'rudder.db');
-  const marker = join(targetHome, '.migrated-from-legacy');
-
-  if (legacyHome === targetHome) {
-    return { migrated: false, from: legacyDb, to: targetDb, reason: 'same-location' };
-  }
-  if (!existsSync(legacyDb)) {
-    return { migrated: false, from: legacyDb, to: targetDb, reason: 'missing-legacy-db' };
-  }
-  mkdirSync(targetHome, { recursive: true });
-  if (existsSync(targetDb) || existsSync(marker)) {
-    return { migrated: false, from: legacyDb, to: targetDb, reason: 'already-initialized' };
-  }
-
-  for (const name of ['rudder.db', 'rudder.db-wal', 'rudder.db-shm']) {
-    const src = join(legacyHome, name);
-    if (existsSync(src)) copyFileSync(src, join(targetHome, name));
-  }
-  writeFileSync(marker, `migrated from ${legacyDb} at ${new Date().toISOString()}\n`);
-  return { migrated: true, from: legacyDb, to: targetDb };
-}
 
 export function openDb(): DatabaseSync {
   if (_db) return _db;

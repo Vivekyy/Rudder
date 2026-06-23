@@ -1,40 +1,21 @@
-import http from 'node:http';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import {
   claudeHook,
   codexHook,
   configureRudderHome,
-  dbPath,
   electronHookArgv,
-  ensureTagged,
-  generateDigest,
-  hookStatus,
-  installHooks,
-  localDay,
-  migrateLegacyDb,
   openDb,
-  resolveAgent,
-  rudderPort,
-  statsForDay,
-  type Agent,
-  type MigrationResult,
 } from '../src/core.ts';
-import type { GenerateDigestRequest, RudderSettings } from '../src/desktop-api.ts';
+import { registerIpc, scheduleInitialTagging, startNotifyServer } from './api.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const DEBOUNCE_MS = 1500;
 
 app.setName('Rudder');
 
 let mainWindow: BrowserWindow | null = null;
-let migration: MigrationResult | null = null;
-let notifyServer: http.Server | null = null;
-let debounce: NodeJS.Timeout | null = null;
-let tagging = false;
-let pending = false;
 
 function hookArgv(sub: string[]): string[] {
   const appEntryPath = process.defaultApp ? process.argv[1] : undefined;
@@ -44,87 +25,7 @@ function hookArgv(sub: string[]): string[] {
 function configureDesktopStorage(): void {
   const userData = app.getPath('userData');
   configureRudderHome(userData);
-  migration ??= migrateLegacyDb(userData);
   openDb();
-}
-
-function currentAgent(): Agent | null {
-  try {
-    return resolveAgent();
-  } catch {
-    return null;
-  }
-}
-
-function currentSettings(): RudderSettings {
-  return {
-    dbPath: dbPath(),
-    userDataPath: app.getPath('userData'),
-    migration: migration ?? {
-      migrated: false,
-      from: '',
-      to: dbPath(),
-      reason: 'not-checked',
-    },
-    agent: currentAgent(),
-  };
-}
-
-function broadcastToday(): void {
-  const stats = statsForDay(localDay());
-  mainWindow?.webContents.send('rudder:stats-updated', stats);
-}
-
-function tagAndBroadcast(): void {
-  if (tagging) {
-    pending = true;
-    return;
-  }
-  tagging = true;
-  try {
-    ensureTagged(localDay());
-  } finally {
-    tagging = false;
-    broadcastToday();
-    if (pending) {
-      pending = false;
-      tagAndBroadcast();
-    }
-  }
-}
-
-function scheduleTagging(): void {
-  if (debounce) clearTimeout(debounce);
-  debounce = setTimeout(() => {
-    debounce = null;
-    tagAndBroadcast();
-  }, DEBOUNCE_MS);
-}
-
-function startNotifyServer(): void {
-  if (notifyServer) return;
-  notifyServer = http.createServer((req, res) => {
-    const { pathname } = new URL(req.url || '/', `http://127.0.0.1:${rudderPort()}/`);
-    if (req.method === 'POST' && pathname === '/notify') {
-      scheduleTagging();
-      res.writeHead(204);
-      res.end();
-      return;
-    }
-    if (req.method === 'GET' && pathname === '/api/stats') {
-      const day = new URL(req.url || '/', `http://127.0.0.1:${rudderPort()}/`).searchParams.get('day') || localDay();
-      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-      res.end(JSON.stringify(statsForDay(day)));
-      return;
-    }
-    res.writeHead(404, { 'content-type': 'text/plain' });
-    res.end('not found');
-  });
-  notifyServer.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code !== 'EADDRINUSE') throw err;
-    notifyServer = null;
-  });
-  notifyServer.listen(rudderPort(), '127.0.0.1');
 }
 
 function rendererFile(): string {
@@ -162,17 +63,6 @@ async function createWindow(): Promise<void> {
   });
 }
 
-function registerIpc(): void {
-  ipcMain.handle('rudder:get-stats', (_event, day?: string) => statsForDay(day || localDay()));
-  ipcMain.handle('rudder:generate-digest', (_event, options?: GenerateDigestRequest) =>
-    generateDigest(options ?? {})
-  );
-  ipcMain.handle('rudder:install-hooks', () => installHooks(hookArgv));
-  ipcMain.handle('rudder:get-hook-status', () => hookStatus(hookArgv));
-  ipcMain.handle('rudder:get-settings', () => currentSettings());
-  ipcMain.handle('rudder:open-external', (_event, url: string) => shell.openExternal(url));
-}
-
 async function runHookMode(which: string | undefined, rest: string[]): Promise<void> {
   configureDesktopStorage();
   try {
@@ -188,10 +78,15 @@ async function runHookMode(which: string | undefined, rest: string[]): Promise<v
 
 async function runApp(): Promise<void> {
   configureDesktopStorage();
-  registerIpc();
-  startNotifyServer();
+  const context = {
+    userDataPath: app.getPath('userData'),
+    hookArgv,
+    mainWindow: () => mainWindow,
+  };
+  registerIpc(context);
+  startNotifyServer(context);
   await createWindow();
-  setTimeout(() => tagAndBroadcast(), 1500);
+  scheduleInitialTagging(context);
 }
 
 const hookIndex = process.argv.indexOf('--rudder-hook');
@@ -209,5 +104,6 @@ app.on('activate', () => {
 });
 
 app.on('window-all-closed', () => {
+  // Keep the app resident on macOS so dock re-activation can reopen the window.
   if (process.platform !== 'darwin') app.quit();
 });

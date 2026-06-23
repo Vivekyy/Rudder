@@ -8,8 +8,8 @@ Quick reference:
 - After opening a PR, use `/address-pr-comments` to triage review feedback.
 - `.github/workflows/publish.yml` builds desktop artifacts on `main`; it no longer
   publishes the npm package.
-- Hook path code must work for both the legacy CLI and the packaged Electron app.
-  See the `rudderArgv()` / `electronHookArgv()` notes in AGENTS.md.
+- Hook path code should use the packaged Electron app's `--rudder-hook` mode.
+  See the `electronHookArgv()` notes in AGENTS.md.
 - The dashboard and the digest read the **same** per-prompt tags
   (`prompt_tags` / `statsForDay`), so their numbers always agree. Tagging is
   out-of-band (never in the capture hook) and uses the shared rubric in
