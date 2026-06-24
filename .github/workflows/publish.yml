@@ -115,8 +115,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          release_assets=()
+          for asset in release/*; do
+            if [[ -f "$asset" ]]; then
+              release_assets+=("$asset")
+            fi
+          done
+
+          if [[ "${#release_assets[@]}" -eq 0 ]]; then
+            echo "No release assets found in release/"
+            exit 1
+          fi
+
           gh release create "${{ steps.check.outputs.tag }}" \
-            release/* \
+            "${release_assets[@]}" \
             --title "Rudder Desktop ${{ steps.check.outputs.tag }}" \
             --notes-file release_notes.md \
             --target "$GITHUB_SHA" \
