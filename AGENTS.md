@@ -84,10 +84,13 @@ errors.
 `.github/workflows/test.yml` runs `npm ci`, `npm run typecheck`, `npm test`, and
 `npm run build` on every push. It is the gate that keeps `main` green; make it a
 **required status check** in branch protection so untested code can't merge.
-`.github/workflows/publish.yml` is now a desktop packaging workflow. On pushes to
-`main` it runs `npm run package -- --linux AppImage --publish never` and uploads
-the generated files from `release/` as workflow artifacts. It does not publish an
-npm package.
+`.github/workflows/publish.yml` is now a desktop packaging and release workflow.
+On pushes to `main` it runs `npm run package -- --linux AppImage --publish
+never` and uploads the generated files from `release/` as workflow artifacts. If
+`package.json`'s version does not have a matching `v<version>` tag yet, it also
+creates a draft GitHub Release and tags that commit. It does not publish an npm
+package. `.github/workflows/release-alert.yml` posts a sticky PR comment when
+merging would create a new desktop release.
 
 ## Installing / re-wiring hooks
 
