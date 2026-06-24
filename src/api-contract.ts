@@ -1,6 +1,6 @@
 import type { Agent, DigestResult } from './digest.ts';
-import type { DayStats } from './tags.ts';
 import type { HookStatus, InstallResult } from './install.ts';
+import type { DayStats } from './tags.ts';
 
 export interface RudderSettings {
   dbPath: string;

@@ -1,10 +1,15 @@
-import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { after, before, test } from 'node:test';
 
 let home: string;
+
+function required<T>(value: T | null | undefined, message: string): T {
+  if (value === null || value === undefined) assert.fail(message);
+  return value;
+}
 
 before(() => {
   home = mkdtempSync(join(tmpdir(), 'rudder-test-'));
@@ -59,9 +64,11 @@ test('claude hook parses stdin JSON into a row', async () => {
   }
 
   const rows = promptsForDay(localDay());
-  const found = rows.find((r) => r.prompt === 'Add an index');
-  assert.ok(found, 'claude hook should have recorded the prompt');
-  assert.equal(found!.project, 'archerdb');
+  const found = required(
+    rows.find((r) => r.prompt === 'Add an index'),
+    'claude hook should have recorded the prompt'
+  );
+  assert.equal(found.project, 'archerdb');
 });
 
 test('statsForDay counts untagged prompts as ignored, then reflects tags', async () => {
@@ -71,7 +78,7 @@ test('statsForDay counts untagged prompts as ignored, then reflects tags', async
   const when = new Date('2020-03-04T12:00:00'); // local noon → stable local day
   const day = localDay(when);
   const ids = ['arch', 'tune', 'bug', 'house', 'chore'].map((p) =>
-    insertPrompt({ source: 'claude', prompt: p, ts: when })!
+    required(insertPrompt({ source: 'claude', prompt: p, ts: when }), 'prompt inserted')
   );
 
   // Before tagging: everything is untagged → counted as ignored, not a category.
@@ -114,7 +121,10 @@ test('untaggedPromptsForDay treats a tag from another version as untagged', asyn
 
   const when = new Date('2020-05-06T12:00:00');
   const day = localDay(when);
-  const id = insertPrompt({ source: 'codex', prompt: 'stale tag', ts: when })!;
+  const id = required(
+    insertPrompt({ source: 'codex', prompt: 'stale tag', ts: when }),
+    'prompt inserted'
+  );
 
   upsertTag(id, 'tuning', 'none', 'codex', TAGGER_VERSION - 1); // older version
   assert.ok(
@@ -180,17 +190,18 @@ test('pngIcon emits a valid PNG of the requested size', async () => {
 
 test('electron hook argv uses the app executable in hook mode', async () => {
   const { electronHookArgv } = await import('../src/install.ts');
-  assert.deepEqual(electronHookArgv('/Applications/Rudder.app/Contents/MacOS/Rudder', ['hook', 'claude']), [
-    '/Applications/Rudder.app/Contents/MacOS/Rudder',
-    '--rudder-hook',
-    'claude',
-  ]);
-  assert.deepEqual(electronHookArgv('/repo/node_modules/.bin/electron', ['hook', 'codex'], '/repo/dist/electron/main.js'), [
-    '/repo/node_modules/.bin/electron',
-    '/repo/dist/electron/main.js',
-    '--rudder-hook',
-    'codex',
-  ]);
+  assert.deepEqual(
+    electronHookArgv('/Applications/Rudder.app/Contents/MacOS/Rudder', ['hook', 'claude']),
+    ['/Applications/Rudder.app/Contents/MacOS/Rudder', '--rudder-hook', 'claude']
+  );
+  assert.deepEqual(
+    electronHookArgv(
+      '/repo/node_modules/.bin/electron',
+      ['hook', 'codex'],
+      '/repo/dist/electron/main.js'
+    ),
+    ['/repo/node_modules/.bin/electron', '/repo/dist/electron/main.js', '--rudder-hook', 'codex']
+  );
 });
 
 test('codex hook reads the notify JSON arg (agent-turn-complete only)', async () => {
@@ -210,8 +221,10 @@ test('codex hook reads the notify JSON arg (agent-turn-complete only)', async ()
   ]);
 
   const rows = promptsForDay(localDay());
-  const found = rows.find((r) => r.source === 'codex' && r.prompt.includes('Refactor auth'));
-  assert.ok(found, 'codex hook should record agent-turn-complete prompts');
-  assert.equal(found!.prompt, 'Refactor auth\nand add tests');
+  const found = required(
+    rows.find((r) => r.source === 'codex' && r.prompt.includes('Refactor auth')),
+    'codex hook should record agent-turn-complete prompts'
+  );
+  assert.equal(found.prompt, 'Refactor auth\nand add tests');
   assert.equal(rows.filter((r) => r.source === 'codex').length, 1, 'non-turn event ignored');
 });

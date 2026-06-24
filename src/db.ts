@@ -1,7 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
+import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 
 export type Source = 'claude' | 'codex';
 

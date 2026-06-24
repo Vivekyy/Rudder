@@ -1,8 +1,8 @@
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { quote } from 'shell-quote';
-import { openDb, dbPath } from './db.ts';
+import { dbPath, openDb } from './db.ts';
 
 /** Supplied by Electron main so hook installers write the current app executable. */
 export type HookArgvProvider = (sub: string[]) => string[];
@@ -20,6 +20,24 @@ export interface HookStatus {
   codexPath: string;
 }
 
+interface ClaudeCommandHook {
+  type: 'command';
+  command: string;
+}
+
+interface ClaudePromptHook {
+  hooks: ClaudeCommandHook[];
+}
+
+type ClaudeHooks = Record<string, unknown> & {
+  UserPromptSubmit?: ClaudePromptHook[];
+};
+
+interface ClaudeSettings {
+  hooks?: ClaudeHooks;
+  [key: string]: unknown;
+}
+
 function backup(path: string): void {
   if (existsSync(path)) copyFileSync(path, `${path}.rudder-bak`);
 }
@@ -34,10 +52,14 @@ function installClaudeHook(argvForSub: HookArgvProvider): string {
   const settingsPath = join(homedir(), '.claude', 'settings.json');
   mkdirSync(dirname(settingsPath), { recursive: true });
 
-  let settings: Record<string, any> = {};
+  let settings: ClaudeSettings = {};
   if (existsSync(settingsPath)) {
     try {
-      settings = JSON.parse(readFileSync(settingsPath, 'utf8')) || {};
+      const parsed: unknown = JSON.parse(readFileSync(settingsPath, 'utf8'));
+      settings =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as ClaudeSettings)
+          : {};
     } catch {
       throw new Error(`Could not parse ${settingsPath} as JSON; fix it and retry.`);
     }
@@ -54,7 +76,7 @@ function installClaudeHook(argvForSub: HookArgvProvider): string {
       hooks: [{ type: 'command', command }],
     });
     backup(settingsPath);
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+    writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
     return `installed → ${settingsPath}`;
   }
   return `already present → ${settingsPath}`;

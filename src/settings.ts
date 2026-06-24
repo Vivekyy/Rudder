@@ -25,7 +25,7 @@ export function loadSettings(): RudderConfig {
 function saveSettings(next: RudderConfig): void {
   const path = settingsPath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(next, null, 2) + '\n');
+  writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
 }
 
 export function agentPath(): string | null {

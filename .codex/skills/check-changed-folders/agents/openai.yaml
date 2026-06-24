@@ -1,4 +1,4 @@
 interface:
   display_name: "Check"
-  short_description: "Run typecheck, tests, and build for the rudder package and enforce Claude/Codex sync."
-  default_prompt: "Identify what changed versus main, enforce Claude/Codex parity, run the package checks (typecheck, test, build), then summarize pass/fail results."
+  short_description: "Run format/lint/typecheck/test/build and enforce .claude/.codex folder parity."
+  default_prompt: "Identify what changed versus main, enforce .claude/.codex folder parity when either folder changed, run the package checks (format, lint, typecheck, test, build), then summarize pass/fail results."

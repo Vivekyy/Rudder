@@ -38,6 +38,10 @@
     "url": "https://github.com/Vivekyy/Rudder/issues"
   },
   "scripts": {
+    "format": "biome format .",
+    "format:fix": "biome format --write .",
+    "lint": "biome check --error-on-warnings .",
+    "lint:fix": "biome check --write --error-on-warnings .",
     "typecheck": "tsc --noEmit",
     "build:main": "rm -rf dist && tsc -p tsconfig.build.json",
     "build:renderer": "next build",
@@ -46,7 +50,7 @@
     "dev:electron": "npm run build:main && RUDDER_RENDERER_URL=http://localhost:3000 electron dist/electron/main.js",
     "package": "npm run build && electron-builder",
     "test": "node --test test/*.ts",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "build": {
     "appId": "com.vivekyy.rudder",
@@ -88,6 +92,7 @@
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.1",
     "@types/node": "^24",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

@@ -63,11 +63,7 @@ export function hydrateAgentPath(): string {
     return next;
   }
   fixPath();
-  const next = mergePathValues(
-    configured ? dirname(configured) : undefined,
-    currentPath(),
-    before
-  );
+  const next = mergePathValues(configured ? dirname(configured) : undefined, currentPath(), before);
   setCurrentPath(next);
   if (next) setAgentEnvPath(next);
   return next;

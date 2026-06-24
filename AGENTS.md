@@ -1,9 +1,37 @@
 # Working in this repo
 
+This file is the single source of truth for agent instructions. `CLAUDE.md` and
+`CODEX.md` intentionally point here instead of duplicating this content.
+
 Rudder is a local-first Electron app that records the prompts you give your AI
 coding assistants and turns a day's worth of them into live stats and a readable
 digest. It installs hooks into Claude Code and Codex that log each prompt to a
 local SQLite DB in the app data directory.
+
+## Agent Rules
+
+- Type safety: avoid `any` unless necessary.
+- Prefer `gh` CLI: when performing GitHub operations such as PRs, issues, and
+  checkout, prefer the GitHub CLI (`gh`) over raw `git` commands where possible.
+- Always fix lint warnings before pushing: CI fails on Biome warnings, not just
+  errors. Run `npm run lint:fix` after edits and verify `npm run lint` exits 0
+  before `git push`. Never push code that produces lint output, even
+  auto-fixable formatting.
+
+## Tech Stack
+
+- Package Manager: npm via `package-lock.json` and `npm` scripts.
+- Build System: TypeScript compiler for Electron/shared code, Next.js static
+  renderer build, and `electron-builder` for desktop packaging.
+- Desktop: Electron packaged for Linux, Windows, and macOS.
+- Database: local SQLite through Node's built-in `node:sqlite` `DatabaseSync`
+  API.
+- UI: React with Next.js renderer output exported as static files for the
+  packaged app.
+- Code Quality: Biome for formatting/linting, `tsc --noEmit` for type checking,
+  and Node's built-in `node --test` runner for tests.
+- Next.js: Version 16. Never create `middleware.ts`; Next.js 16 renamed
+  middleware to `proxy.ts`. Always use `proxy.ts` for request interception.
 
 ## Layout
 
@@ -52,14 +80,17 @@ dashboard and the digest can never disagree:
 
 ```
 npm install          # install dev deps
+npm run format       # Biome formatting check
+npm run lint         # Biome formatting/linting, warnings fail CI
 npm run typecheck    # tsc --noEmit
 npm test             # node --test test/*.ts (requires Node >= 23.6)
 npm run build        # compile Electron/main code and export the Next renderer
 npm run package      # build desktop packages with electron-builder
 ```
 
-Always run `npm run typecheck` and `npm test` before committing. Use `npm run
-build` for app-level validation before opening a PR.
+Always run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm test`
+before committing. Use `npm run build` for app-level validation before opening a
+PR.
 
 ### Gotcha: hook paths
 
@@ -73,24 +104,24 @@ errors.
 
 1. Branch off `main` (never commit directly to `main`).
 2. Make the change; run the package checks via the `check-changed-folders` skill
-   (Codex equivalent of `/check`) — or directly: `npm run typecheck`, `npm test`,
-   `npm run build`.
+   (Codex equivalent of `/check`) — or directly: `npm run format`,
+   `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 3. Commit, push, and open a PR with `gh pr create --base main`.
 4. After the PR opens, address any review comments with the `address-pr-comments`
    skill (Codex equivalent of `/address-pr-comments`).
 
 ## Continuous integration
 
-`.github/workflows/test.yml` runs `npm ci`, `npm run typecheck`, `npm test`, and
-`npm run build` on every push. It is the gate that keeps `main` green; make it a
-**required status check** in branch protection so untested code can't merge.
+`.github/workflows/test.yml` runs `npm ci`, `npm run format`, `npm run lint`,
+`npm run typecheck`, `npm test`, and `npm run build` on every push. It is the
+gate that keeps `main` green; make it a **required status check** in branch
+protection so untested code can't merge.
 `.github/workflows/publish.yml` is now a desktop packaging and release workflow.
-On pushes to `main` it runs `npm run package -- --linux AppImage --publish
-never` and uploads the generated files from `release/` as workflow artifacts. If
-`package.json`'s version does not have a matching `v<version>` tag yet, it also
-creates a draft GitHub Release and tags that commit. It does not publish an npm
-package. `.github/workflows/release-alert.yml` posts a sticky PR comment when
-merging would create a new desktop release.
+On pushes to `main` it builds Linux, Windows, and macOS artifacts, then creates a
+draft GitHub Release when `package.json` has a version without a matching
+`v<version>` tag. It does not publish an npm package.
+`.github/workflows/release-alert.yml` posts a sticky PR comment when merging
+would create a new desktop release.
 
 ## Installing / re-wiring hooks
 
@@ -107,9 +138,10 @@ or another stable executable path.
 
 ### Available skills
 
-- check-changed-folders: Run typecheck/test/build for the package on the current
-  branch and enforce Claude/Codex sync. Use for `/check` requests and pre-PR
-  validation. (file: .codex/skills/check-changed-folders/SKILL.md)
+- check-changed-folders: Run format/lint/typecheck/test/build for the package on
+  the current branch and enforce `.claude/` / `.codex/` parity only when one of
+  those folders changes. Use for `/check` requests and pre-PR validation. (file:
+  .codex/skills/check-changed-folders/SKILL.md)
 - address-pr-comments: Fetch open review comments on the current branch's PR,
   dedupe them, and fix/decline/defer each with a written reason. Invoked
   automatically by `check-changed-folders` when a PR exists. (file:
@@ -176,12 +208,12 @@ features, `:sparkles:` = performance).
 (The full gitmoji set applies; this table lists the codes most common in this
 repo. See https://gitmoji.dev for the rest.)
 
-## Claude / Codex parity
+## Claude / Codex Folder Parity
 
-Keep Claude and Codex instructions synchronized. Any change to one side must be
-mirrored on the other in the same PR (the `check-changed-folders` skill enforces
-this as a gate):
+Keep `.claude/` and `.codex/` automation instructions synchronized when either
+folder changes. This rule does not apply to root instruction files:
+`AGENTS.md` is the source of truth, while `CLAUDE.md` and `CODEX.md` intentionally
+only point to it.
 
-- `CLAUDE.md` <-> `AGENTS.md`
 - `.claude/commands/check.md` <-> `.codex/skills/check-changed-folders/SKILL.md`
 - `.claude/commands/address-pr-comments.md` <-> `.codex/skills/address-pr-comments/SKILL.md`
