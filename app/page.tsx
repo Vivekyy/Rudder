@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { rudderClient } from '../renderer/rudder-client.ts';
-import type { DigestResult } from '../src/digest.ts';
 import type { RudderSettings } from '../src/api-contract.ts';
+import type { DigestResult } from '../src/digest.ts';
 import type { HookStatus } from '../src/install.ts';
 import type { DayStats } from '../src/tags.ts';
 
@@ -36,18 +36,22 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function refresh(selectedDay = day) {
-    if (!client) throw new Error('Rudder desktop bridge is unavailable. Open this UI from the desktop app.');
-    const [nextStats, nextSettings, nextHooks] = await Promise.all([
-      client.getStats(selectedDay),
-      client.getSettings(),
-      client.getHookStatus(),
-    ]);
-    setStats(nextStats);
-    setSettings(nextSettings);
-    setAgentPath(nextSettings.agentPath ?? '');
-    setHooks(nextHooks);
-  }
+  const refresh = useCallback(
+    async (selectedDay = day) => {
+      if (!client)
+        throw new Error('Rudder desktop bridge is unavailable. Open this UI from the desktop app.');
+      const [nextStats, nextSettings, nextHooks] = await Promise.all([
+        client.getStats(selectedDay),
+        client.getSettings(),
+        client.getHookStatus(),
+      ]);
+      setStats(nextStats);
+      setSettings(nextSettings);
+      setAgentPath(nextSettings.agentPath ?? '');
+      setHooks(nextHooks);
+    },
+    [client, day]
+  );
 
   useEffect(() => {
     refresh().catch((err: Error) => setError(err.message));
@@ -55,7 +59,7 @@ export default function Home() {
     return client.onStatsUpdated((next) => {
       if (next.day === day) setStats(next);
     });
-  }, [client, day]);
+  }, [client, day, refresh]);
 
   async function installHooks() {
     if (!client) return;
@@ -101,7 +105,9 @@ export default function Home() {
   }
 
   const correction =
-    stats?.correctionPct === null || stats?.correctionPct === undefined ? '-' : `${stats.correctionPct}%`;
+    stats?.correctionPct === null || stats?.correctionPct === undefined
+      ? '-'
+      : `${stats.correctionPct}%`;
   const hookSummary = hooks
     ? `${hooks.claude ? 'Claude installed' : 'Claude missing'} / ${hooks.codex ? 'Codex installed' : 'Codex missing'}`
     : 'Checking hooks';
@@ -126,7 +132,7 @@ export default function Home() {
             <div className="correction">{correction}</div>
             <p className="muted">
               {stats?.correctionPct === null
-                ? "You have not said yes or no yet today."
+                ? 'You have not said yes or no yet today.'
                 : 'of the time, you said no to your AI'}
             </p>
             <div className="totals">
@@ -155,7 +161,10 @@ export default function Home() {
                     </span>
                   </div>
                   <div className="track">
-                    <div className="fill" style={{ width: `${stat.pct}%`, background: cat.color }} />
+                    <div
+                      className="fill"
+                      style={{ width: `${stat.pct}%`, background: cat.color }}
+                    />
                   </div>
                 </div>
               );
@@ -183,14 +192,14 @@ export default function Home() {
               value={agentPath}
               onChange={(event) => setAgentPath(event.target.value)}
             />
-            <button disabled={busy} onClick={saveAgentPath}>
+            <button disabled={busy} onClick={saveAgentPath} type="button">
               Save Agent Path
             </button>
             <div className="settingRow">
               <b>Database</b>
               <span className="settingValue">{settings?.dbPath ?? 'loading'}</span>
             </div>
-            <button disabled={busy} onClick={installHooks}>
+            <button disabled={busy} onClick={installHooks} type="button">
               Install or Repair Hooks
             </button>
           </div>
@@ -201,8 +210,13 @@ export default function Home() {
               <label className="subtle" htmlFor="day">
                 Date
               </label>
-              <input id="day" type="date" value={day} onChange={(event) => setDay(event.target.value)} />
-              <button disabled={busy} onClick={generate}>
+              <input
+                id="day"
+                type="date"
+                value={day}
+                onChange={(event) => setDay(event.target.value)}
+              />
+              <button disabled={busy} onClick={generate} type="button">
                 Generate Digest
               </button>
               {digest ? <pre className="digest">{digest.markdown}</pre> : null}

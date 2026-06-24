@@ -1,11 +1,11 @@
-import { openDb, type PromptRow } from './db.ts';
 import {
   CATEGORIES,
+  type Category,
   normCategory,
   normReaction,
-  type Category,
   type Reaction,
 } from './classify.ts';
+import { openDb, type PromptRow } from './db.ts';
 
 /**
  * Bump when the rubric or prompt rendering changes in a way that should

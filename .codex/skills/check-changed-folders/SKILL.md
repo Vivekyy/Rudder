@@ -1,11 +1,11 @@
 ---
 name: check-changed-folders
-description: Run typecheck, tests, and build for the rudder package on the current branch versus main, and enforce Claude/Codex instruction parity. Use when asked to run "/check", to validate a branch before commit/PR, or whenever a user asks to run checks before publishing.
+description: Run typecheck, tests, and build for the rudder package on the current branch versus main, and enforce .claude/.codex folder parity. Use when asked to run "/check", to validate a branch before commit/PR, or whenever a user asks to run checks before publishing.
 ---
 
 # Check Changed Folders
 
-Identify what changed on the branch, enforce Claude/Codex instruction parity, run the package checks, and report pass/fail status with actionable failure output. Rudder is a single npm package, so the checks are repo-wide rather than per-folder.
+Identify what changed on the branch, enforce `.claude/` / `.codex/` folder parity when either folder changes, run the package checks, and report pass/fail status with actionable failure output. Rudder is a single npm package, so the checks are repo-wide rather than per-folder.
 
 ## Workflow
 
@@ -18,24 +18,25 @@ git diff --name-only
 git diff --name-only --cached
 ```
 
-   If anything under `src/`, `bin/`, `test/`, or a build/config file (`package.json`, `tsconfig*.json`, `.github/`) changed, the package checks below apply.
+   If anything under `src/`, `bin/`, `test/`, or a build/config file (`package.json`, `tsconfig*.json`, `.github/`, `biome.json`) changed, the package checks below apply.
 
-2. Enforce Claude/Codex sync before running checks:
+2. Enforce `.claude/` / `.codex/` sync for folder changes only:
 
-- Claude-side paths: `CLAUDE.md`, `.claude/`
-- Codex-side paths: `AGENTS.md`, `.codex/`
-- If any Claude-side path changed, require at least one Codex-side path change in the same diff, and vice versa.
-- If this requirement fails, mark the check as failed and report which side changed without a mirrored update.
-- When both sides changed, verify intent parity for mirrored artifacts:
-  - `CLAUDE.md` <-> `AGENTS.md`
+- This gate applies only to changes under `.claude/` and `.codex/`.
+- It does **not** apply to root instruction files such as `CLAUDE.md`, `CODEX.md`, or `AGENTS.md`.
+- If any `.claude/` path changed, require at least one `.codex/` path change in the same diff, and vice versa.
+- If this requirement fails, mark the check as failed and report which folder changed without a mirrored update.
+- When both folders changed, verify intent parity for mirrored artifacts:
   - `.claude/commands/check.md` <-> `.codex/skills/check-changed-folders/SKILL.md`
   - `.claude/commands/address-pr-comments.md` <-> `.codex/skills/address-pr-comments/SKILL.md`
 
 3. Install dependencies if `node_modules/` does not exist: run `npm install`.
 
-4. Run the package checks (the same set `prepublishOnly` runs, so green means publishable):
+4. Run the package checks:
 
 ```bash
+npm run format
+npm run lint
 npm run typecheck
 npm test
 npm run build
@@ -45,13 +46,13 @@ npm run build
 
 6. Report concise results:
 
-- State whether typecheck, tests, and build passed, failed, or were skipped.
-- Include dedicated results for Claude/Codex sync and PR comments (`passed`, `failed`, or `skipped`) and why.
+- State whether format, lint, typecheck, tests, and build passed, failed, or were skipped.
+- Include dedicated results for `.claude/` / `.codex/` sync and PR comments (`passed`, `failed`, or `skipped`) and why.
 - For failures, include the key error output and which command failed.
 - Distinguish real failures (type errors, test failures, unaddressed P0/P1 PR comments) from environment issues (missing CLI tools, no PR).
 
 ## Notes
 
 - Default comparison branch is `origin/main` (not local `main`, which may be stale).
-- Claude/Codex parity is a required gate, not an optional reminder.
+- `.claude/` / `.codex/` parity is a required gate only when one of those folders changes.
 - If nothing relevant changed, state that no checks were required.

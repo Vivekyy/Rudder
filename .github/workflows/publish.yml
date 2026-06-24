@@ -14,10 +14,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  package-linux:
+  check-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      previous_tag: ${{ steps.check.outputs.previous_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,53 +57,198 @@ jobs:
           echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
           echo "Previous tag: ${previous_tag:-none}"
 
+  package-linux:
+    needs: check-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - run: npm ci
 
-      - run: npm run package -- --linux AppImage --publish never
+      - run: npm run package -- --linux --publish never
 
-      - name: Remove unpacked build directories
-        run: rm -rf release/*-unpacked
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rudder-linux
-          path: release/*
-
-      - name: Create stable-named copies for latest download URLs
-        if: steps.check.outputs.release == 'true'
+      - name: Prepare Linux release artifacts
         run: |
+          rm -rf release/*-unpacked
+          mkdir -p artifacts
           shopt -s nullglob
+
+          for file in release/*.AppImage release/*.AppImage.blockmap release/*.deb release/*-linux.yml; do
+            if [[ -f "$file" ]]; then
+              cp "$file" artifacts/
+            fi
+          done
 
           for file in release/*.AppImage; do
             arch=$(basename "$file" | sed -E 's/.*-([^-]+)\.AppImage$/\1/')
             if [[ "$arch" =~ ^[0-9]+\.[0-9]+\.[0-9] || "$arch" == "$(basename "$file")" ]]; then
               arch="x64"
             fi
-            cp "$file" "release/Rudder-${arch}.AppImage"
+            cp "$file" "artifacts/Rudder-${arch}.AppImage"
             echo "Created stable copy: Rudder-${arch}.AppImage"
           done
 
           for file in release/*-linux.yml; do
             if [[ "$(basename "$file")" != "latest-linux.yml" ]]; then
-              cp "$file" "release/latest-linux.yml"
+              cp "$file" "artifacts/latest-linux.yml"
               echo "Created stable copy: latest-linux.yml"
               break
             fi
           done
 
-          ls -la release
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rudder-linux
+          path: artifacts/*
+
+  package-windows:
+    needs: check-release
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - name: Configure npm scripts for Bash
+        shell: bash
+        run: npm config set script-shell "C:\\Program Files\\Git\\bin\\bash.exe"
+
+      - run: npm run package -- --win nsis --publish never
+
+      - name: Prepare Windows release artifacts
+        shell: bash
+        run: |
+          rm -rf release/*-unpacked
+          mkdir -p artifacts
+          shopt -s nullglob
+
+          for file in release/*.exe release/*.exe.blockmap release/latest.yml; do
+            if [[ -f "$file" ]]; then
+              cp "$file" artifacts/
+            fi
+          done
+
+          for file in release/*.exe; do
+            cp "$file" artifacts/Rudder-x64-Setup.exe
+            echo "Created stable copy: Rudder-x64-Setup.exe"
+            break
+          done
+
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rudder-windows
+          path: artifacts/*
+
+  package-macos:
+    needs: check-release
+    runs-on: macos-13
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - run: npm run package -- --mac dmg zip --${{ matrix.arch }} --publish never
+
+      - name: Prepare macOS release artifacts
+        run: |
+          rm -rf release/*-unpacked
+          mkdir -p artifacts
+          shopt -s nullglob
+
+          for file in release/*.dmg release/*.dmg.blockmap release/*.zip release/*.zip.blockmap; do
+            if [[ -f "$file" ]]; then
+              cp "$file" artifacts/
+            fi
+          done
+
+          for file in release/latest-mac.yml; do
+            cp "$file" "artifacts/latest-mac-${{ matrix.arch }}.yml"
+            echo "Created arch-specific copy: latest-mac-${{ matrix.arch }}.yml"
+            break
+          done
+
+          for file in release/*.dmg; do
+            cp "$file" "artifacts/Rudder-${{ matrix.arch }}.dmg"
+            echo "Created stable copy: Rudder-${{ matrix.arch }}.dmg"
+            break
+          done
+
+          for file in release/*.zip; do
+            if [[ "$(basename "$file")" != *blockmap ]]; then
+              cp "$file" "artifacts/Rudder-${{ matrix.arch }}-mac.zip"
+              echo "Created stable copy: Rudder-${{ matrix.arch }}-mac.zip"
+              break
+            fi
+          done
+
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rudder-macos-${{ matrix.arch }}
+          path: artifacts/*
+
+  publish-release:
+    needs:
+      - check-release
+      - package-linux
+      - package-windows
+      - package-macos
+    if: needs.check-release.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: List release artifacts
+        run: ls -la release-artifacts
 
       - name: Generate release notes
-        if: steps.check.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PREVIOUS_TAG="${{ steps.check.outputs.previous_tag }}"
-          CURRENT_TAG="${{ steps.check.outputs.tag }}"
+          PREVIOUS_TAG="${{ needs.check-release.outputs.previous_tag }}"
+          CURRENT_TAG="${{ needs.check-release.outputs.tag }}"
 
           if [[ -n "$PREVIOUS_TAG" ]]; then
             gh api "repos/${{ github.repository }}/releases/generate-notes" \
@@ -114,13 +264,15 @@ jobs:
           fi
 
       - name: Publish GitHub release
-        if: steps.check.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.check.outputs.tag }}" \
-            release/* \
-            --title "Rudder Desktop ${{ steps.check.outputs.tag }}" \
+          shopt -s nullglob
+          artifacts=(release-artifacts/*)
+
+          gh release create "${{ needs.check-release.outputs.tag }}" \
+            "${artifacts[@]}" \
+            --title "Rudder Desktop ${{ needs.check-release.outputs.tag }}" \
             --notes-file release_notes.md \
             --target "$GITHUB_SHA" \
             --draft
