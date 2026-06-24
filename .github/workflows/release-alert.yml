@@ -68,8 +68,8 @@ jobs:
                   '',
                   `This PR sets the version to **\`${new_version}\`**, and no \`${new_tag}\` tag exists yet.`,
                   'Merging to `main` will package Rudder and create a draft desktop release.',
-                  `🏷️ The merge commit will be tagged as \`${new_tag}\` via \`.github/workflows/publish.yml\`.`,
                   '',
+                  `🏷️ The merge commit will be tagged as \`${new_tag}\` via \`.github/workflows/publish.yml\`.`,
                   `If that is not intended, keep \`package.json\` at the current version: \`${current_version}\` (\`${current_tag}\`).`,
                 ].join('\n')
               : [
