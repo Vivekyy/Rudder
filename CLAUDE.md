@@ -6,8 +6,9 @@ Quick reference:
 - Run `/check` (or `npm run typecheck`, `npm test`, `npm run build`) before committing.
 - Branch off `main`; never commit directly to `main`.
 - After opening a PR, use `/address-pr-comments` to triage review feedback.
-- `.github/workflows/publish.yml` builds desktop artifacts on `main`; it no longer
-  publishes the npm package.
+- `.github/workflows/publish.yml` builds desktop artifacts on `main` and creates
+  a draft GitHub Release when `package.json` has a new `v<version>` tag; it no
+  longer publishes the npm package.
 - Hook path code should use the packaged Electron app's `--rudder-hook` mode.
   See the `electronHookArgv()` notes in AGENTS.md.
 - The dashboard and the digest read the **same** per-prompt tags

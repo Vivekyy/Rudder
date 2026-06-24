@@ -1,7 +1,8 @@
 name: Desktop Package
 
-# Builds the downloadable Rudder desktop app on main. The npm package is no
-# longer the product surface; Electron packaging produces the distributable.
+# Builds the downloadable Rudder desktop app on main. If package.json's version
+# does not have a matching v<version> tag yet, the workflow creates a draft
+# GitHub Release and tags that commit as shipped.
 on:
   push:
     branches:
@@ -16,9 +17,40 @@ jobs:
   package-linux:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine whether this version needs releasing
+        id: check
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="v${version}"
+          previous_tag=""
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists - version unchanged, no release will be created."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            mapfile -t RELEASE_TAGS < <({ git tag -l 'v*'; echo "${tag}"; } | sort -V | uniq)
+
+            for index in "${!RELEASE_TAGS[@]}"; do
+              if [[ "${RELEASE_TAGS[$index]}" == "$tag" && "$index" -gt 0 ]]; then
+                previous_tag="${RELEASE_TAGS[$((index - 1))]}"
+                break
+              fi
+            done
+
+            echo "Tag ${tag} not found - will create a draft desktop release."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+          echo "Previous tag: ${previous_tag:-none}"
 
       - uses: actions/setup-node@v4
         with:
@@ -32,3 +64,60 @@ jobs:
         with:
           name: rudder-linux
           path: release/*
+
+      - name: Create stable-named copies for latest download URLs
+        if: steps.check.outputs.release == 'true'
+        run: |
+          shopt -s nullglob
+
+          for file in release/*.AppImage; do
+            arch=$(basename "$file" | sed -E 's/.*-([^-]+)\.AppImage$/\1/')
+            if [[ "$arch" =~ ^[0-9]+\.[0-9]+\.[0-9] || "$arch" == "$(basename "$file")" ]]; then
+              arch="x64"
+            fi
+            cp "$file" "release/Rudder-${arch}.AppImage"
+            echo "Created stable copy: Rudder-${arch}.AppImage"
+          done
+
+          for file in release/*-linux.yml; do
+            if [[ "$(basename "$file")" != "latest-linux.yml" ]]; then
+              cp "$file" "release/latest-linux.yml"
+              echo "Created stable copy: latest-linux.yml"
+              break
+            fi
+          done
+
+          ls -la release
+
+      - name: Generate release notes
+        if: steps.check.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PREVIOUS_TAG="${{ steps.check.outputs.previous_tag }}"
+          CURRENT_TAG="${{ steps.check.outputs.tag }}"
+
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$CURRENT_TAG" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f previous_tag_name="$PREVIOUS_TAG" \
+              --jq ".body" > release_notes.md
+          else
+            gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$CURRENT_TAG" \
+              -f target_commitish="$GITHUB_SHA" \
+              --jq ".body" > release_notes.md
+          fi
+
+      - name: Publish GitHub release
+        if: steps.check.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.check.outputs.tag }}" \
+            release/* \
+            --title "Rudder Desktop ${{ steps.check.outputs.tag }}" \
+            --notes-file release_notes.md \
+            --target "$GITHUB_SHA" \
+            --draft

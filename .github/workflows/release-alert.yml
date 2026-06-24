@@ -1,0 +1,88 @@
+name: Release alert
+
+# Posts (and keeps updated) a PR comment whenever merging the PR would create a
+# new desktop release. The comment is "sticky": a hidden marker lets us update
+# the same comment on every push instead of spamming new ones.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-alert-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  release-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine whether a release tag is missing
+        id: check
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists - merging will NOT create a new release."
+            echo "will_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${tag} not found - merging WILL create a desktop release."
+            echo "will_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post or update the release-alert comment
+        uses: actions/github-script@v7
+        env:
+          will_release: ${{ steps.check.outputs.will_release }}
+          version: ${{ steps.check.outputs.version }}
+          tag: ${{ steps.check.outputs.tag }}
+        with:
+          script: |
+            const marker = '<!-- release-alert -->';
+            const { will_release, version, tag } = process.env;
+            const willRelease = will_release === 'true';
+
+            const body = willRelease
+              ? [
+                  marker,
+                  '## Merging this PR will create a desktop release',
+                  '',
+                  `This PR sets the version to **\`${version}\`**, and no \`${tag}\` tag exists yet.`,
+                  'Merging to `main` will package Rudder, create a draft desktop release,',
+                  `and tag the merge commit as \`${tag}\` via \`.github/workflows/publish.yml\`.`,
+                  '',
+                  'If that is not intended, keep `package.json` at an already-tagged version before merging.',
+                ].join('\n')
+              : [
+                  marker,
+                  '## No desktop release on merge',
+                  '',
+                  `The current version (\`${version}\`) is already tagged (\`${tag}\`), so merging this PR`,
+                  'will **not** create a new desktop release. Bump the version in `package.json` to prepare one.',
+                ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
