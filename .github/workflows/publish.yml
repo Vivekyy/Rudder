@@ -60,6 +60,9 @@ jobs:
 
       - run: npm run package -- --linux AppImage --publish never
 
+      - name: Remove unpacked build directories
+        run: rm -rf release/*-unpacked
+
       - uses: actions/upload-artifact@v4
         with:
           name: rudder-linux
@@ -115,20 +118,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          release_assets=()
-          for asset in release/*; do
-            if [[ -f "$asset" ]]; then
-              release_assets+=("$asset")
-            fi
-          done
-
-          if [[ "${#release_assets[@]}" -eq 0 ]]; then
-            echo "No release assets found in release/"
-            exit 1
-          fi
-
           gh release create "${{ steps.check.outputs.tag }}" \
-            "${release_assets[@]}" \
+            release/* \
             --title "Rudder Desktop ${{ steps.check.outputs.tag }}" \
             --notes-file release_notes.md \
             --target "$GITHUB_SHA" \
