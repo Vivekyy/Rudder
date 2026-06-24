@@ -31,19 +31,19 @@ jobs:
         run: |
           base_ref="${GITHUB_BASE_REF:-main}"
           current_version="$(git show "origin/${base_ref}:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
-          version="$(node -p "require('./package.json').version")"
-          tag="v${version}"
+          new_version="$(node -p "require('./package.json').version")"
           current_tag="v${current_version}"
+          new_tag="v${new_version}"
           echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
           echo "current_tag=${current_tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "new_tag=${new_tag}" >> "$GITHUB_OUTPUT"
 
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists - merging will NOT create a new release."
+          if git rev-parse -q --verify "refs/tags/${new_tag}" >/dev/null; then
+            echo "Tag ${new_tag} already exists - merging will NOT create a new release."
             echo "will_release=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Tag ${tag} not found - merging WILL create a desktop release."
+            echo "Tag ${new_tag} not found - merging WILL create a desktop release."
             echo "will_release=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -53,12 +53,12 @@ jobs:
           will_release: ${{ steps.check.outputs.will_release }}
           current_version: ${{ steps.check.outputs.current_version }}
           current_tag: ${{ steps.check.outputs.current_tag }}
-          version: ${{ steps.check.outputs.version }}
-          tag: ${{ steps.check.outputs.tag }}
+          new_version: ${{ steps.check.outputs.new_version }}
+          new_tag: ${{ steps.check.outputs.new_tag }}
         with:
           script: |
             const marker = '<!-- release-alert -->';
-            const { will_release, current_version, current_tag, version, tag } = process.env;
+            const { will_release, current_version, current_tag, new_version, new_tag } = process.env;
             const willRelease = will_release === 'true';
 
             const body = willRelease
@@ -66,9 +66,9 @@ jobs:
                   marker,
                   '## 🚀 Merging this PR will create a desktop release',
                   '',
-                  `This PR sets the version to **\`${version}\`**, and no \`${tag}\` tag exists yet.`,
+                  `This PR sets the version to **\`${new_version}\`**, and no \`${new_tag}\` tag exists yet.`,
                   'Merging to `main` will package Rudder and create a draft desktop release.',
-                  `🏷️ The merge commit will be tagged as \`${tag}\` via \`.github/workflows/publish.yml\`.`,
+                  `🏷️ The merge commit will be tagged as \`${new_tag}\` via \`.github/workflows/publish.yml\`.`,
                   '',
                   `If that is not intended, keep \`package.json\` at the current version: \`${current_version}\` (\`${current_tag}\`).`,
                 ].join('\n')
@@ -76,7 +76,7 @@ jobs:
                   marker,
                   '## 📦 No desktop release on merge',
                   '',
-                  `The current version (\`${version}\`) is already tagged (\`${tag}\`), so merging this PR`,
+                  `The current version (\`${new_version}\`) is already tagged (\`${new_tag}\`), so merging this PR`,
                   'will **not** create a new desktop release.',
                   '',
                   'If that is not intended, bump the version in `package.json` to prepare a new release.',
