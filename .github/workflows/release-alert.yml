@@ -57,20 +57,21 @@ jobs:
             const body = willRelease
               ? [
                   marker,
-                  '## Merging this PR will create a desktop release',
+                  '## 🚀 Merging this PR will create a desktop release',
                   '',
                   `This PR sets the version to **\`${version}\`**, and no \`${tag}\` tag exists yet.`,
-                  'Merging to `main` will package Rudder, create a draft desktop release,',
-                  `and tag the merge commit as \`${tag}\` via \`.github/workflows/publish.yml\`.`,
+                  '📦 Merging to `main` will package Rudder and create a draft desktop release.',
+                  `🏷️ The merge commit will be tagged as \`${tag}\` via \`.github/workflows/publish.yml\`.`,
                   '',
                   'If that is not intended, keep `package.json` at an already-tagged version before merging.',
                 ].join('\n')
               : [
                   marker,
-                  '## No desktop release on merge',
+                  '## 📦 No desktop release on merge',
                   '',
                   `The current version (\`${version}\`) is already tagged (\`${tag}\`), so merging this PR`,
-                  'will **not** create a new desktop release. Bump the version in `package.json` to prepare one.',
+                  'will **not** create a new desktop release.',
+                  '🏷️ Bump the version in `package.json` to prepare one.',
                 ].join('\n');
 
             const { owner, repo } = context.repo;
