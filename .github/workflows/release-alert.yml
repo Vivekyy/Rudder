@@ -29,8 +29,13 @@ jobs:
       - name: Determine whether a release tag is missing
         id: check
         run: |
+          base_ref="${GITHUB_BASE_REF:-main}"
+          current_version="$(git show "origin/${base_ref}:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
           version="$(node -p "require('./package.json').version")"
           tag="v${version}"
+          current_tag="v${current_version}"
+          echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
+          echo "current_tag=${current_tag}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
@@ -46,12 +51,14 @@ jobs:
         uses: actions/github-script@v7
         env:
           will_release: ${{ steps.check.outputs.will_release }}
+          current_version: ${{ steps.check.outputs.current_version }}
+          current_tag: ${{ steps.check.outputs.current_tag }}
           version: ${{ steps.check.outputs.version }}
           tag: ${{ steps.check.outputs.tag }}
         with:
           script: |
             const marker = '<!-- release-alert -->';
-            const { will_release, version, tag } = process.env;
+            const { will_release, current_version, current_tag, version, tag } = process.env;
             const willRelease = will_release === 'true';
 
             const body = willRelease
@@ -60,10 +67,10 @@ jobs:
                   '## 🚀 Merging this PR will create a desktop release',
                   '',
                   `This PR sets the version to **\`${version}\`**, and no \`${tag}\` tag exists yet.`,
-                  '📦 Merging to `main` will package Rudder and create a draft desktop release.',
+                  'Merging to `main` will package Rudder and create a draft desktop release.',
                   `🏷️ The merge commit will be tagged as \`${tag}\` via \`.github/workflows/publish.yml\`.`,
                   '',
-                  'If that is not intended, keep `package.json` at an already-tagged version before merging.',
+                  `If that is not intended, keep \`package.json\` at the current version: \`${current_version}\` (\`${current_tag}\`).`,
                 ].join('\n')
               : [
                   marker,
@@ -71,7 +78,8 @@ jobs:
                   '',
                   `The current version (\`${version}\`) is already tagged (\`${tag}\`), so merging this PR`,
                   'will **not** create a new desktop release.',
-                  '🏷️ Bump the version in `package.json` to prepare one.',
+                  '',
+                  'If that is not intended, bump the version in `package.json` to prepare a new release.',
                 ].join('\n');
 
             const { owner, repo } = context.repo;
