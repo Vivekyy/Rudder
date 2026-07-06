@@ -12,26 +12,26 @@ local SQLite DB in the app data directory.
 
 - Type safety: avoid `any` unless necessary.
 - Prefer `gh` CLI: when performing GitHub operations such as PRs, issues, and
-  checkout, prefer the GitHub CLI (`gh`) over raw `git` commands where possible.
+checkout, prefer the GitHub CLI (`gh`) over raw `git` commands where possible.
 - Always fix lint warnings before pushing: CI fails on Biome warnings, not just
-  errors. Run `npm run lint:fix` after edits and verify `npm run lint` exits 0
-  before `git push`. Never push code that produces lint output, even
-  auto-fixable formatting.
+errors. Run `npm run lint:fix` after edits and verify `npm run lint` exits 0
+before `git push`. Never push code that produces lint output, even
+auto-fixable formatting.
 
 ## Tech Stack
 
 - Package Manager: npm via `package-lock.json` and `npm` scripts.
 - Build System: TypeScript compiler for Electron/shared code, Next.js static
-  renderer build, and `electron-builder` for desktop packaging.
+renderer build, and `electron-builder` for desktop packaging.
 - Desktop: Electron packaged for Linux, Windows, and macOS.
 - Database: local SQLite through Node's built-in `node:sqlite` `DatabaseSync`
-  API.
+API.
 - UI: React with Next.js renderer output exported as static files for the
-  packaged app.
+packaged app.
 - Code Quality: Biome for formatting/linting, `tsc --noEmit` for type checking,
-  and Node's built-in `node --test` runner for tests.
+and Node's built-in `node --test` runner for tests.
 - Next.js: Version 16. Never create `middleware.ts`; Next.js 16 renamed
-  middleware to `proxy.ts`. Always use `proxy.ts` for request interception.
+middleware to `proxy.ts`. Always use `proxy.ts` for request interception.
 
 ## Layout
 
@@ -58,23 +58,23 @@ Per-prompt classification is the single source of the numbers, so the live
 dashboard and the digest can never disagree:
 
 - Each prompt is tagged exactly once (`prompt_tags`, keyed by `prompt_id`) with a
-  `category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
-  (agree/disagree/none), using the shared rubric in `classify.ts`.
+`category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
+(agree/disagree/none), using the shared rubric in `classify.ts`.
 - Tagging is **out-of-band**, never in the capture hook: the hook inserts the
-  prompt and fires a best-effort `POST /notify` at the running desktop app,
-  which debounces (~5s) and batches a single agent call. If the app is down,
-  the prompt is just left untagged and backfilled by the next app startup or
-  digest generation.
+prompt and fires a best-effort `POST /notify` at the running desktop app,
+which debounces (~5s) and batches a single agent call. If the app is down,
+the prompt is just left untagged and backfilled by the next app startup or
+digest generation.
 - `statsForDay()` aggregates tags into percentages (untagged rows count as
-  `ignored` and are excluded from the denominator, so the four percentages sum
-  to ~100% of counted prompts). Desktop digest generation calls `ensureTagged`
-  then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those exact numbers —
-  the LLM is told not to reclassify or recompute.
+`ignored` and are excluded from the denominator, so the four percentages sum
+to ~100% of counted prompts). Desktop digest generation calls `ensureTagged`
+then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those exact numbers —
+the LLM is told not to reclassify or recompute.
 - `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
-  older version count as untagged and get reclassified). Bump it whenever the
-  rubric or prompt rendering changes in a way that should re-tag history.
+older version count as untagged and get reclassified). Bump it whenever the
+rubric or prompt rendering changes in a way that should re-tag history.
 - The tagger inherits `RUDDER_DISABLE=1` via `runAgent`, so classifying a prompt
-  never records the classification instruction as a new prompt.
+never records the classification instruction as a new prompt.
 
 ## Local development
 
@@ -104,11 +104,11 @@ errors.
 
 1. Branch off `main` (never commit directly to `main`).
 2. Make the change; run the package checks via the `check-changed-folders` skill
-   (Codex equivalent of `/check`) — or directly: `npm run format`,
+  (Codex equivalent of `/check`) — or directly: `npm run format`,
    `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 3. Commit, push, and open a PR with `gh pr create --base main`.
 4. After the PR opens, address any review comments with the `address-pr-comments`
-   skill (Codex equivalent of `/address-pr-comments`).
+  skill (Codex equivalent of `/address-pr-comments`).
 
 ## Continuous integration
 
@@ -139,20 +139,20 @@ or another stable executable path.
 ### Available skills
 
 - check-changed-folders: Run format/lint/typecheck/test/build for the package on
-  the current branch and enforce `.claude/` / `.codex/` parity only when one of
-  those folders changes. Use for `/check` requests and pre-PR validation. (file:
-  .codex/skills/check-changed-folders/SKILL.md)
+the current branch and enforce `.claude/` / `.codex/` parity only when one of
+those folders changes. Use for `/check` requests and pre-PR validation. (file:
+.codex/skills/check-changed-folders/SKILL.md)
 - address-pr-comments: Fetch open review comments on the current branch's PR,
-  dedupe them, and fix/decline/defer each with a written reason. Invoked
-  automatically by `check-changed-folders` when a PR exists. (file:
-  .codex/skills/address-pr-comments/SKILL.md)
+dedupe them, and fix/decline/defer each with a written reason. Invoked
+automatically by `check-changed-folders` when a PR exists. (file:
+.codex/skills/address-pr-comments/SKILL.md)
 
 ### Trigger rules
 
 - If the user asks to run checks/tests/lint for the branch or references `/check`,
-  use `check-changed-folders`.
+use `check-changed-folders`.
 - If the user asks to address PR comments, fix Greptile findings, or references
-  `/address-pr-comments`, use `address-pr-comments`.
+`/address-pr-comments`, use `address-pr-comments`.
 
 ## Gitmoji
 
@@ -162,51 +162,53 @@ most specific emoji that fits the change.
 Note: `:zap:` and `:sparkles:` are swapped from the standard guide (`:zap:` = new
 features, `:sparkles:` = performance).
 
-| Emoji | Code | Description |
-|-------|------|-------------|
-| 🎨 | `:art:` | Improve structure / format of the code |
-| ⚡️ | `:zap:` | Introduce new features |
-| 🔥 | `:fire:` | Remove code or files |
-| 🐛 | `:bug:` | Fix a bug |
-| 🚑️ | `:ambulance:` | Critical hotfix |
-| ✨ | `:sparkles:` | Improve performance |
-| 📝 | `:memo:` | Add or update documentation |
-| 🚀 | `:rocket:` | Deploy stuff |
-| ✅ | `:white_check_mark:` | Add, update, or pass tests |
-| 🔒️ | `:lock:` | Fix security or privacy issues |
-| 🔖 | `:bookmark:` | Release / Version tags |
-| 🚨 | `:rotating_light:` | Fix compiler / linter warnings |
-| 🚧 | `:construction:` | Work in progress |
-| 💚 | `:green_heart:` | Fix CI Build |
-| ⬆️ | `:arrow_up:` | Upgrade dependencies |
-| ⬇️ | `:arrow_down:` | Downgrade dependencies |
-| 📌 | `:pushpin:` | Pin dependencies to specific versions |
-| 👷 | `:construction_worker:` | Add or update CI build system |
-| ♻️ | `:recycle:` | Refactor code |
-| ➕ | `:heavy_plus_sign:` | Add a dependency |
-| ➖ | `:heavy_minus_sign:` | Remove a dependency |
-| 🔧 | `:wrench:` | Add or update configuration files |
-| ✏️ | `:pencil2:` | Fix typos |
-| ⏪️ | `:rewind:` | Revert changes |
-| 📦️ | `:package:` | Add or update compiled files or packages |
-| 🚚 | `:truck:` | Move or rename resources |
-| 💥 | `:boom:` | Introduce breaking changes |
-| 💡 | `:bulb:` | Add or update source code comments |
-| 🗃️ | `:card_file_box:` | Perform database related changes |
-| 🔊 | `:loud_sound:` | Add or update logs |
-| 🔇 | `:mute:` | Remove logs |
-| 🏷️ | `:label:` | Add or update types |
-| 🚩 | `:triangular_flag_on_post:` | Add, update, or remove feature flags |
-| 🥅 | `:goal_net:` | Catch errors |
-| 🗑️ | `:wastebasket:` | Deprecate code needing cleanup |
-| 🩹 | `:adhesive_bandage:` | Simple fix for non-critical issue |
-| ⚰️ | `:coffin:` | Remove dead code |
-| 🧪 | `:test_tube:` | Add a failing test |
-| 🦺 | `:safety_vest:` | Add or update validation code |
-| 🙈 | `:see_no_evil:` | Add or update a .gitignore file |
+
+| Emoji | Code                        | Description                              |
+| ----- | --------------------------- | ---------------------------------------- |
+| 🎨    | `:art:`                     | Improve structure / format of the code   |
+| ⚡️    | `:zap:`                     | Introduce new features                   |
+| 🔥    | `:fire:`                    | Remove code or files                     |
+| 🐛    | `:bug:`                     | Fix a bug                                |
+| 🚑️   | `:ambulance:`               | Critical hotfix                          |
+| ✨     | `:sparkles:`                | Improve performance                      |
+| 📝    | `:memo:`                    | Add or update documentation              |
+| 🚀    | `:rocket:`                  | Deploy stuff                             |
+| ✅     | `:white_check_mark:`        | Add, update, or pass tests               |
+| 🔒️   | `:lock:`                    | Fix security or privacy issues           |
+| 🔖    | `:bookmark:`                | Release / Version tags                   |
+| 🚨    | `:rotating_light:`          | Fix compiler / linter warnings           |
+| 🚧    | `:construction:`            | Work in progress                         |
+| 💚    | `:green_heart:`             | Fix CI Build                             |
+| ⬆️    | `:arrow_up:`                | Upgrade dependencies                     |
+| ⬇️    | `:arrow_down:`              | Downgrade dependencies                   |
+| 📌    | `:pushpin:`                 | Pin dependencies to specific versions    |
+| 👷    | `:construction_worker:`     | Add or update CI build system            |
+| ♻️    | `:recycle:`                 | Refactor code                            |
+| ➕     | `:heavy_plus_sign:`         | Add a dependency                         |
+| ➖     | `:heavy_minus_sign:`        | Remove a dependency                      |
+| 🔧    | `:wrench:`                  | Add or update configuration files        |
+| ✏️    | `:pencil2:`                 | Fix typos                                |
+| ⏪️    | `:rewind:`                  | Revert changes                           |
+| 📦️   | `:package:`                 | Add or update compiled files or packages |
+| 🚚    | `:truck:`                   | Move or rename resources                 |
+| 💥    | `:boom:`                    | Introduce breaking changes               |
+| 💡    | `:bulb:`                    | Add or update source code comments       |
+| 🗃️   | `:card_file_box:`           | Perform database related changes         |
+| 🔊    | `:loud_sound:`              | Add or update logs                       |
+| 🔇    | `:mute:`                    | Remove logs                              |
+| 🏷️   | `:label:`                   | Add or update types                      |
+| 🚩    | `:triangular_flag_on_post:` | Add, update, or remove feature flags     |
+| 🥅    | `:goal_net:`                | Catch errors                             |
+| 🗑️   | `:wastebasket:`             | Deprecate code needing cleanup           |
+| 🩹    | `:adhesive_bandage:`        | Simple fix for non-critical issue        |
+| ⚰️    | `:coffin:`                  | Remove dead code                         |
+| 🧪    | `:test_tube:`               | Add a failing test                       |
+| 🦺    | `:safety_vest:`             | Add or update validation code            |
+| 🙈    | `:see_no_evil:`             | Add or update a .gitignore file          |
+
 
 (The full gitmoji set applies; this table lists the codes most common in this
-repo. See https://gitmoji.dev for the rest.)
+repo. See [https://gitmoji.dev](https://gitmoji.dev) for the rest.)
 
 ## Claude / Codex Folder Parity
 
@@ -217,3 +219,4 @@ only point to it.
 
 - `.claude/commands/check.md` <-> `.codex/skills/check-changed-folders/SKILL.md`
 - `.claude/commands/address-pr-comments.md` <-> `.codex/skills/address-pr-comments/SKILL.md`
+
