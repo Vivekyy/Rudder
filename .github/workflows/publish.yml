@@ -127,10 +127,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Configure npm scripts for Bash
-        shell: bash
-        run: npm config set script-shell "C:\\Program Files\\Git\\bin\\bash.exe"
-
       - run: npm run package -- --win nsis --publish never
 
       - name: Prepare Windows release artifacts
