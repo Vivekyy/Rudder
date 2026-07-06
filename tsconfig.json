@@ -26,6 +26,7 @@
     "next-env.d.ts",
     "src/**/*.ts",
     "electron/**/*.ts",
+    "electron/**/*.cts",
     "app/**/*.tsx",
     "renderer/**/*.ts",
     ".next/types/**/*.ts",

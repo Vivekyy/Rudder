@@ -44,7 +44,7 @@ async function createWindow(): Promise<void> {
     title: 'Rudder',
     backgroundColor: '#0e1116',
     webPreferences: {
-      preload: join(here, 'preload.js'),
+      preload: join(here, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
