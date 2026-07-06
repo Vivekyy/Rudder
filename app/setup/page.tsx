@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { rudderClient } from '../../renderer/rudder-client.ts';
 import type { SetupStatus } from '../../src/api-contract.ts';
 
+interface RefreshOptions {
+  syncAgentPath?: boolean;
+}
+
 export default function Setup() {
   const client = useMemo(() => {
     try {
@@ -17,16 +21,19 @@ export default function Setup() {
   const [setupBusy, setSetupBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!client)
-      throw new Error('Rudder desktop bridge is unavailable. Open this UI from the desktop app.');
-    const nextStatus = await client.getSetupStatus();
-    setStatus(nextStatus);
-    setAgentPath(nextStatus.settings.agentPath ?? '');
-  }, [client]);
+  const refresh = useCallback(
+    async (options: RefreshOptions = {}) => {
+      if (!client)
+        throw new Error('Rudder desktop bridge is unavailable. Open this UI from the desktop app.');
+      const nextStatus = await client.getSetupStatus();
+      setStatus(nextStatus);
+      if (options.syncAgentPath) setAgentPath(nextStatus.settings.agentPath ?? '');
+    },
+    [client]
+  );
 
   useEffect(() => {
-    refresh().catch((err: Error) => setError(err.message));
+    refresh({ syncAgentPath: true }).catch((err: Error) => setError(err.message));
   }, [refresh]);
 
   async function installHooks() {
@@ -49,7 +56,7 @@ export default function Setup() {
     setError(null);
     try {
       await client.setAgentPath(agentPath);
-      await refresh();
+      await refresh({ syncAgentPath: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {
