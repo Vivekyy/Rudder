@@ -70,7 +70,7 @@ export default function Home() {
     stats?.correctionPct === null || stats?.correctionPct === undefined
       ? '-'
       : `${stats.correctionPct}%`;
-  const status = !setupStatus?.complete ? 'setup needed' : stats ? 'live' : 'loading';
+  const status = setupStatus && !setupStatus.complete ? 'setup needed' : stats ? 'live' : 'loading';
 
   return (
     <main className="wrap">
