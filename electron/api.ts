@@ -47,7 +47,7 @@ export function setupStatus(context: ApiContext): SetupStatus {
   const hooks = hookStatus(context.hookArgv);
   const settings = currentSettings(context);
   return {
-    complete: Boolean(settings.agent && hooks.claude && hooks.codex),
+    complete: Boolean(settings.agent && (hooks.claude || hooks.codex)),
     hooks,
     settings,
   };

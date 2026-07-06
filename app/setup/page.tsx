@@ -59,7 +59,15 @@ export default function Setup() {
 
   async function openDashboard() {
     if (!client) return;
-    await client.showDashboard();
+    setBusy(true);
+    setError(null);
+    try {
+      await client.showDashboard();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const hookSummary = status
@@ -126,7 +134,7 @@ export default function Setup() {
           </button>
           <button
             className="secondary"
-            disabled={!status?.complete}
+            disabled={!status?.complete || busy}
             onClick={openDashboard}
             type="button"
           >
