@@ -59,14 +59,11 @@ export default function Setup() {
 
   async function openDashboard() {
     if (!client) return;
-    setBusy(true);
     setError(null);
     try {
       await client.showDashboard();
     } catch (err) {
       setError((err as Error).message);
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -132,7 +129,7 @@ export default function Setup() {
           <button disabled={busy} onClick={installHooks} type="button">
             Install or Repair Hooks
           </button>
-          <button className="secondary" disabled={busy} onClick={openDashboard} type="button">
+          <button className="secondary" onClick={openDashboard} type="button">
             Open Dashboard
           </button>
         </div>
