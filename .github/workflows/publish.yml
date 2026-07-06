@@ -24,7 +24,7 @@ jobs:
       tag: ${{ steps.check.outputs.tag }}
       previous_tag: ${{ steps.check.outputs.previous_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -65,9 +65,9 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -106,7 +106,7 @@ jobs:
 
           ls -la artifacts
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rudder-linux
           path: artifacts/*
@@ -119,9 +119,9 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -150,7 +150,7 @@ jobs:
 
           ls -la artifacts
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rudder-windows
           path: artifacts/*
@@ -167,9 +167,9 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -211,7 +211,7 @@ jobs:
 
           ls -la artifacts
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rudder-macos-${{ matrix.arch }}
           path: artifacts/*
@@ -227,11 +227,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: release-artifacts
           merge-multiple: true
