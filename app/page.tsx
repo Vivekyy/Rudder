@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { rudderClient } from '../renderer/rudder-client.ts';
+import type { SetupStatus } from '../src/api-contract.ts';
 import type { DigestResult } from '../src/digest.ts';
 import type { DayStats } from '../src/tags.ts';
 
@@ -27,6 +28,7 @@ export default function Home() {
   }, []);
   const [day, setDay] = useState(localDay());
   const [stats, setStats] = useState<DayStats | null>(null);
+  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [digest, setDigest] = useState<DigestResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +37,9 @@ export default function Home() {
     async (selectedDay = day) => {
       if (!client)
         throw new Error('Rudder desktop bridge is unavailable. Open this UI from the desktop app.');
-      const nextStats = await client.getStats(selectedDay);
-      setStats(nextStats);
+      const nextSetupStatus = await client.getSetupStatus();
+      setSetupStatus(nextSetupStatus);
+      setStats(await client.getStats(selectedDay));
     },
     [client, day]
   );
@@ -67,17 +70,17 @@ export default function Home() {
     stats?.correctionPct === null || stats?.correctionPct === undefined
       ? '-'
       : `${stats.correctionPct}%`;
+  const status = !setupStatus?.complete ? 'setup needed' : stats ? 'live' : 'loading';
 
   return (
     <main className="wrap">
       <header className="topbar">
         <div className="brand">
           <h1>Rudder</h1>
-          <p>Local AI coding stats from Claude Code and Codex.</p>
         </div>
-        <div className="live">
-          <span className="dot" />
-          <span>{stats ? 'live' : 'loading'}</span>
+        <div className="status">
+          <span className={status === 'setup needed' ? 'dot warnDot' : 'dot'} />
+          <span>{status}</span>
         </div>
       </header>
 
