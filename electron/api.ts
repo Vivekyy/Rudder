@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { type BrowserWindow, ipcMain, shell } from 'electron';
 import { type Agent, resetAgentPathCache, resolveAgent } from '../src/agent.ts';
-import type { GenerateDigestRequest, RudderSettings } from '../src/api-contract.ts';
+import type { GenerateDigestRequest, RudderSettings, SetupStatus } from '../src/api-contract.ts';
 import { dbPath, localDay, rudderPort } from '../src/db.ts';
 import { generateDigest } from '../src/digest.ts';
 import { type HookArgvProvider, hookStatus, installHooks } from '../src/install.ts';
@@ -12,10 +12,13 @@ import { statsForDay } from '../src/tags.ts';
 // This is a batching debounce, not an agent-call timeout.
 const PROMPT_NOTIFY_DEBOUNCE_MS = 5000;
 
-interface ApiContext {
+export type RudderRoute = 'dashboard' | 'setup';
+
+export interface ApiContext {
   userDataPath: string;
   hookArgv: HookArgvProvider;
   mainWindow: () => BrowserWindow | null;
+  navigate: (route: RudderRoute) => Promise<void>;
 }
 
 let notifyServer: http.Server | null = null;
@@ -37,6 +40,16 @@ function currentSettings(context: ApiContext): RudderSettings {
     userDataPath: context.userDataPath,
     agent: currentAgent(),
     agentPath: agentPath(),
+  };
+}
+
+export function setupStatus(context: ApiContext): SetupStatus {
+  const hooks = hookStatus(context.hookArgv);
+  const settings = currentSettings(context);
+  return {
+    complete: Boolean(settings.agent && (hooks.claude || hooks.codex)),
+    hooks,
+    settings,
   };
 }
 
@@ -115,11 +128,14 @@ export function registerIpc(context: ApiContext): void {
   ipcMain.handle('rudder:install-hooks', () => installHooks(context.hookArgv));
   ipcMain.handle('rudder:get-hook-status', () => hookStatus(context.hookArgv));
   ipcMain.handle('rudder:get-settings', () => currentSettings(context));
+  ipcMain.handle('rudder:get-setup-status', () => setupStatus(context));
   ipcMain.handle('rudder:set-agent-path', (_event, path?: string) => {
     setAgentPath(path);
     resetAgentPathCache();
     return currentSettings(context);
   });
+  ipcMain.handle('rudder:show-dashboard', () => context.navigate('dashboard'));
+  ipcMain.handle('rudder:show-setup', () => context.navigate('setup'));
   ipcMain.handle('rudder:open-external', (_event, url: string) => shell.openExternal(url));
 }
 

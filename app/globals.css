@@ -110,6 +110,11 @@ input {
   width: 8px;
 }
 
+.warnDot {
+  background: var(--warn);
+  box-shadow: 0 0 0 0 rgba(240, 136, 62, 0.6);
+}
+
 .grid {
   display: grid;
   gap: 14px;
@@ -126,6 +131,19 @@ input {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 18px;
+}
+
+.setupWrap {
+  max-width: 680px;
+}
+
+.setupCard {
+  display: grid;
+  gap: 14px;
+}
+
+.setupActions {
+  align-items: center;
 }
 
 .card h2 {

@@ -9,6 +9,12 @@ export interface RudderSettings {
   agentPath: string | null;
 }
 
+export interface SetupStatus {
+  complete: boolean;
+  hooks: HookStatus;
+  settings: RudderSettings;
+}
+
 export interface GenerateDigestRequest {
   day?: string;
   agent?: Agent;
@@ -21,7 +27,10 @@ export interface RudderDesktopApi {
   installHooks(): Promise<InstallResult>;
   getHookStatus(): Promise<HookStatus>;
   getSettings(): Promise<RudderSettings>;
+  getSetupStatus(): Promise<SetupStatus>;
   setAgentPath(path?: string): Promise<RudderSettings>;
+  showDashboard(): Promise<void>;
+  showSetup(): Promise<void>;
   onStatsUpdated(callback: (stats: DayStats) => void): () => void;
 }
 
