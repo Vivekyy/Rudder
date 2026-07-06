@@ -14,7 +14,7 @@ export default function Setup() {
   }, []);
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [agentPath, setAgentPath] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [setupBusy, setSetupBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -31,7 +31,7 @@ export default function Setup() {
 
   async function installHooks() {
     if (!client) return;
-    setBusy(true);
+    setSetupBusy(true);
     setError(null);
     try {
       await client.installHooks();
@@ -39,13 +39,13 @@ export default function Setup() {
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      setSetupBusy(false);
     }
   }
 
   async function saveAgentPath() {
     if (!client) return;
-    setBusy(true);
+    setSetupBusy(true);
     setError(null);
     try {
       await client.setAgentPath(agentPath);
@@ -53,7 +53,7 @@ export default function Setup() {
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      setSetupBusy(false);
     }
   }
 
@@ -115,7 +115,7 @@ export default function Setup() {
             value={agentPath}
             onChange={(event) => setAgentPath(event.target.value)}
           />
-          <button disabled={busy} onClick={saveAgentPath} type="button">
+          <button disabled={setupBusy} onClick={saveAgentPath} type="button">
             Save Agent Path
           </button>
         </div>
@@ -126,7 +126,7 @@ export default function Setup() {
         </div>
 
         <div className="actions setupActions">
-          <button disabled={busy} onClick={installHooks} type="button">
+          <button disabled={setupBusy} onClick={installHooks} type="button">
             Install or Repair Hooks
           </button>
           <button className="secondary" onClick={openDashboard} type="button">
