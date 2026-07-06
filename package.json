@@ -43,9 +43,9 @@
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --write --error-on-warnings .",
     "typecheck": "tsc --noEmit",
-    "build:main": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build:main": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json",
     "build:renderer": "next build",
-    "build": "rm -rf dist out .next && npm run build:main && npm run build:renderer",
+    "build": "node -e \"const fs = require('node:fs'); for (const path of ['dist', 'out', '.next']) fs.rmSync(path, { recursive: true, force: true })\" && npm run build:main && npm run build:renderer",
     "dev:renderer": "next dev",
     "dev:electron": "npm run build:main && RUDDER_RENDERER_URL=http://localhost:3000 electron dist/electron/main.js",
     "package": "npm run build && electron-builder",
@@ -79,6 +79,10 @@
       ],
       "category": "Development",
       "syncDesktopName": true
+    },
+    "deb": {
+      "artifactName": "Rudder-${version}-${arch}.${ext}",
+      "packageName": "rudder"
     },
     "win": {
       "target": "nsis"
