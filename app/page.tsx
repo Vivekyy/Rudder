@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { rudderClient } from '../renderer/rudder-client.ts';
-import type { RudderSettings } from '../src/api-contract.ts';
 import type { DigestResult } from '../src/digest.ts';
-import type { HookStatus } from '../src/install.ts';
 import type { DayStats } from '../src/tags.ts';
 
 const CATS = [
@@ -29,10 +27,7 @@ export default function Home() {
   }, []);
   const [day, setDay] = useState(localDay());
   const [stats, setStats] = useState<DayStats | null>(null);
-  const [settings, setSettings] = useState<RudderSettings | null>(null);
-  const [hooks, setHooks] = useState<HookStatus | null>(null);
   const [digest, setDigest] = useState<DigestResult | null>(null);
-  const [agentPath, setAgentPath] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,15 +35,8 @@ export default function Home() {
     async (selectedDay = day) => {
       if (!client)
         throw new Error('Rudder desktop bridge is unavailable. Open this UI from the desktop app.');
-      const [nextStats, nextSettings, nextHooks] = await Promise.all([
-        client.getStats(selectedDay),
-        client.getSettings(),
-        client.getHookStatus(),
-      ]);
+      const nextStats = await client.getStats(selectedDay);
       setStats(nextStats);
-      setSettings(nextSettings);
-      setAgentPath(nextSettings.agentPath ?? '');
-      setHooks(nextHooks);
     },
     [client, day]
   );
@@ -60,35 +48,6 @@ export default function Home() {
       if (next.day === day) setStats(next);
     });
   }, [client, day, refresh]);
-
-  async function installHooks() {
-    if (!client) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await client.installHooks();
-      setHooks(await client.getHookStatus());
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveAgentPath() {
-    if (!client) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const nextSettings = await client.setAgentPath(agentPath);
-      setSettings(nextSettings);
-      setAgentPath(nextSettings.agentPath ?? '');
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function generate() {
     if (!client) return;
@@ -108,9 +67,6 @@ export default function Home() {
     stats?.correctionPct === null || stats?.correctionPct === undefined
       ? '-'
       : `${stats.correctionPct}%`;
-  const hookSummary = hooks
-    ? `${hooks.claude ? 'Claude installed' : 'Claude missing'} / ${hooks.codex ? 'Codex installed' : 'Codex missing'}`
-    : 'Checking hooks';
 
   return (
     <main className="wrap">
@@ -173,37 +129,6 @@ export default function Home() {
         </div>
 
         <aside className="stack">
-          <div className="card">
-            <h2>Setup</h2>
-            <div className="settingRow">
-              <b>Hooks</b>
-              <span className="settingValue">{hookSummary}</span>
-            </div>
-            <div className="settingRow">
-              <b>Agent</b>
-              <span className="settingValue">{settings?.agent ?? 'not found'}</span>
-            </div>
-            <label className="subtle" htmlFor="agentPath">
-              Claude or Codex executable path
-            </label>
-            <input
-              id="agentPath"
-              placeholder="/opt/homebrew/bin/claude"
-              value={agentPath}
-              onChange={(event) => setAgentPath(event.target.value)}
-            />
-            <button disabled={busy} onClick={saveAgentPath} type="button">
-              Save Agent Path
-            </button>
-            <div className="settingRow">
-              <b>Database</b>
-              <span className="settingValue">{settings?.dbPath ?? 'loading'}</span>
-            </div>
-            <button disabled={busy} onClick={installHooks} type="button">
-              Install or Repair Hooks
-            </button>
-          </div>
-
           <div className="card">
             <h2>Digest</h2>
             <div className="form">
