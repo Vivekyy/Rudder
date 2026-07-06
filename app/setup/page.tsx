@@ -64,16 +64,6 @@ export default function Setup() {
     }
   }
 
-  async function openDashboard() {
-    if (!client) return;
-    setError(null);
-    try {
-      await client.showDashboard();
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
   const hookSummary = status
     ? `${status.hooks.claude ? 'Claude installed' : 'Claude missing'} / ${status.hooks.codex ? 'Codex installed' : 'Codex missing'}`
     : 'Checking hooks';
@@ -84,9 +74,8 @@ export default function Setup() {
       <header className="topbar">
         <div className="brand">
           <h1>Setup</h1>
-          <p>Connect Rudder to Claude Code and Codex before tracking prompts.</p>
         </div>
-        <div className="live">
+        <div className="status">
           <span className={status?.complete ? 'dot' : 'dot warnDot'} />
           <span>{status?.complete ? 'ready' : 'setup needed'}</span>
         </div>
@@ -94,10 +83,6 @@ export default function Setup() {
 
       <section className="card setupCard">
         <h2>Rudder Setup</h2>
-        <p className="muted">
-          Rudder needs capture hooks installed and a Claude or Codex executable available for
-          tagging and digest generation.
-        </p>
 
         <div className="settingRow">
           <b>Status</b>
@@ -135,9 +120,6 @@ export default function Setup() {
         <div className="actions setupActions">
           <button disabled={setupBusy} onClick={installHooks} type="button">
             Install or Repair Hooks
-          </button>
-          <button className="secondary" onClick={openDashboard} type="button">
-            Open Dashboard
           </button>
         </div>
       </section>
