@@ -132,12 +132,7 @@ export default function Setup() {
           <button disabled={busy} onClick={installHooks} type="button">
             Install or Repair Hooks
           </button>
-          <button
-            className="secondary"
-            disabled={!status?.complete || busy}
-            onClick={openDashboard}
-            type="button"
-          >
+          <button className="secondary" disabled={busy} onClick={openDashboard} type="button">
             Open Dashboard
           </button>
         </div>
