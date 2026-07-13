@@ -6,6 +6,13 @@ import { rudderHome } from './db.ts';
 
 const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || '';
 const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
+const DISABLE_VALUES = new Set(['1', 'true', 'yes', 'on']);
+
+export function telemetryDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return ['RUDDER_TELEMETRY_DISABLED', 'RUDDER_DISABLE_TELEMETRY', 'DO_NOT_TRACK'].some((name) =>
+    DISABLE_VALUES.has((env[name] ?? '').trim().toLowerCase())
+  );
+}
 
 /** Read or generate a stable anonymous installation ID. */
 function loadDistinctId(): string {
@@ -32,7 +39,7 @@ let _client: PostHog | null = null;
 let _distinctId: string | null = null;
 
 function client(): PostHog | null {
-  if (!POSTHOG_API_KEY) return null;
+  if (!POSTHOG_API_KEY || telemetryDisabled()) return null;
   if (!_client) {
     _client = new PostHog(POSTHOG_API_KEY, {
       host: POSTHOG_HOST,

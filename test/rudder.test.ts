@@ -173,6 +173,16 @@ test('parseTags tolerates fences/prose and normalizes categories', async () => {
   assert.deepEqual(parseTags('no array here'), []);
 });
 
+test('telemetryDisabled honors rudder and standard opt-out environment flags', async () => {
+  const { telemetryDisabled } = await import('../src/telemetry.ts');
+
+  assert.equal(telemetryDisabled({}), false);
+  assert.equal(telemetryDisabled({ RUDDER_TELEMETRY_DISABLED: '1' }), true);
+  assert.equal(telemetryDisabled({ RUDDER_DISABLE_TELEMETRY: ' true ' }), true);
+  assert.equal(telemetryDisabled({ DO_NOT_TRACK: 'yes' }), true);
+  assert.equal(telemetryDisabled({ DO_NOT_TRACK: '0' }), false);
+});
+
 test('pngIcon emits a valid PNG of the requested size', async () => {
   const { pngIcon } = await import('../src/icon.ts');
   const png = pngIcon(192);
