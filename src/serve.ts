@@ -107,7 +107,13 @@ export function serve(opts: ServeOptions = {}): void {
 
   function broadcast(): void {
     const payload = `data: ${JSON.stringify(statsForDay(localDay()))}\n\n`;
-    for (const c of clients) c.write(payload);
+    for (const c of clients) {
+      try {
+        c.write(payload);
+      } catch {
+        clients.delete(c);
+      }
+    }
   }
 
   // Tag any untagged prompts for today, then push fresh stats to every client.
