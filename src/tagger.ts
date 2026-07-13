@@ -1,13 +1,7 @@
-import { type Agent, resolveAgent, runAgent } from './agent.ts';
-import {
-  type Category,
-  CLASSIFICATION_RUBRIC,
-  normCategory,
-  normReaction,
-  type Reaction,
-} from './classify.ts';
-import { type PromptRow, promptsForDay } from './db.ts';
-import { TAGGER_VERSION, untaggedPromptsForDay, upsertTag } from './tags.ts';
+import { promptsForDay, type PromptRow } from './db.ts';
+import { untaggedPromptsForDay, upsertTag, TAGGER_VERSION } from './tags.ts';
+import { runAgent, resolveAgent, type Agent } from './agent.ts';
+import { CLASSIFICATION_RUBRIC, normCategory, normReaction, type Category, type Reaction } from './classify.ts';
 
 export interface ParsedTag {
   id: number;

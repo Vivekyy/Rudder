@@ -1,41 +1,12 @@
 # Working in this repo
 
-This file is the single source of truth for agent instructions. `CLAUDE.md` and
-`CODEX.md` intentionally point here instead of duplicating this content.
-
-Rudder is a local-first Electron app that records the prompts you give your AI
-coding assistants and turns a day's worth of them into live stats and a readable
-digest. It installs hooks into Claude Code and Codex that log each prompt to a
-local SQLite DB in the app data directory.
-
-## Agent Rules
-
-- Type safety: avoid `any` unless necessary.
-- Prefer `gh` CLI: when performing GitHub operations such as PRs, issues, and
-checkout, prefer the GitHub CLI (`gh`) over raw `git` commands where possible.
-- Always fix lint warnings before pushing: CI fails on Biome warnings, not just
-errors. Run `npm run lint:fix` after edits and verify `npm run lint` exits 0
-before `git push`. Never push code that produces lint output, even
-auto-fixable formatting.
-
-## Tech Stack
-
-- Package Manager: npm via `package-lock.json` and `npm` scripts.
-- Build System: TypeScript compiler for Electron/shared code, Next.js static
-renderer build, and `electron-builder` for desktop packaging.
-- Desktop: Electron packaged for Linux, Windows, and macOS.
-- Database: local SQLite through Node's built-in `node:sqlite` `DatabaseSync`
-API.
-- UI: React with Next.js renderer output exported as static files for the
-packaged app.
-- Code Quality: Biome for formatting/linting, `tsc --noEmit` for type checking,
-and Node's built-in `node --test` runner for tests.
-- Next.js: Version 16. Never create `middleware.ts`; Next.js 16 renamed
-middleware to `proxy.ts`. Always use `proxy.ts` for request interception.
+Rudder records the prompts you give your AI coding assistants and turns a day's
+worth of them into a readable digest. It installs hooks into Claude Code and
+Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 
 ## Layout
 
-- `src/` — shared TypeScript services used by Electron, hooks, and tests.
+- `src/` — TypeScript sources (run directly via Node's type stripping in dev).
   - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
   - `hooks.ts` — Claude/Codex capture hooks; best-effort `/notify` ping to the dashboard.
   - `classify.ts` — the single source of truth for the category/reaction rubric.
@@ -43,13 +14,13 @@ middleware to `proxy.ts`. Always use `proxy.ts` for request interception.
   - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
   - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
   - `digest.ts` — renders the Markdown digest; numbers come from `statsForDay`, the LLM only writes prose.
-  - `api-contract.ts` — typed preload/renderer API contract.
-  - `settings.ts` — app-data settings for agent path/PATH cache.
+  - `serve.ts` / `ui.ts` — the `rudder start` daemon and its inlined dashboard page
+    (also a PWA: `ui.ts` exports the manifest + service worker, served by `serve.ts`).
   - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
-  - `install.ts` — hook install/status helpers for the desktop app.
-- `electron/` — Electron main/preload/API entrypoints. Main owns app lifecycle and hook mode; `api.ts` owns IPC and the notify endpoint.
-- `app/` / `renderer/` — Next.js React renderer and desktop client adapter.
-- `dist/` — compiled Node/Electron output. `out/` is the exported Next.js renderer.
+  - `install.ts` — `rudder init` (DB + hook wiring).
+- `bin/rudder.ts` — CLI entry point.
+- `dist/` — compiled output, the only code that ships (see `files` in `package.json`).
+  Dev runs `bin/rudder.ts`; the published package runs `dist/bin/rudder.js`.
 - `test/` — `node --test` suites.
 
 ## Stats pipeline (dashboard + digest)
@@ -58,101 +29,136 @@ Per-prompt classification is the single source of the numbers, so the live
 dashboard and the digest can never disagree:
 
 - Each prompt is tagged exactly once (`prompt_tags`, keyed by `prompt_id`) with a
-`category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
-(agree/disagree/none), using the shared rubric in `classify.ts`.
+  `category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
+  (agree/disagree/none), using the shared rubric in `classify.ts`.
 - Tagging is **out-of-band**, never in the capture hook: the hook inserts the
-prompt and fires a best-effort `POST /notify` at the running desktop app,
-which debounces (~5s) and batches a single agent call. If the app is down,
-the prompt is just left untagged and backfilled by the next app startup or
-digest generation.
+  prompt and fires a best-effort `POST /notify` at the `rudder start` daemon,
+  which debounces (~1.5s) and batches a single agent call. If the daemon is down,
+  the prompt is just left untagged and backfilled by the next `rudder start`,
+  `rudder tag`, or `rudder digest`.
 - `statsForDay()` aggregates tags into percentages (untagged rows count as
-`ignored` and are excluded from the denominator, so the four percentages sum
-to ~100% of counted prompts). Desktop digest generation calls `ensureTagged`
-then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those exact numbers —
-the LLM is told not to reclassify or recompute.
+  `ignored` and are excluded from the denominator, so the four percentages sum
+  to ~100% of counted prompts). `rudder digest` calls
+  `ensureTagged` then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those
+  exact numbers — the LLM is told not to reclassify or recompute.
 - `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
-older version count as untagged and get reclassified). Bump it whenever the
-rubric or prompt rendering changes in a way that should re-tag history.
+  older version count as untagged and get reclassified). Bump it whenever the
+  rubric or prompt rendering changes in a way that should re-tag history.
 - The tagger inherits `RUDDER_DISABLE=1` via `runAgent`, so classifying a prompt
-never records the classification instruction as a new prompt.
+  never records the classification instruction as a new prompt.
 
 ## Local development
 
 ```
-npm install          # install dev deps
-npm run format       # Biome formatting check
-npm run lint         # Biome formatting/linting, warnings fail CI
-npm run typecheck    # tsc --noEmit
-npm test             # node --test test/*.ts (requires Node >= 23.6)
-npm run build        # compile Electron/main code and export the Next renderer
-npm run package      # build desktop packages with electron-builder
+npm install        # install dev deps (typescript, @types/node, ...)
+npm run typecheck   # tsc --noEmit
+npm test            # node --test
+npm run build       # rm -rf dist && tsc -p tsconfig.build.json
 ```
 
-Always run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm test`
-before committing. Use `npm run build` for app-level validation before opening a
-PR.
+Always run `npm run typecheck` and `npm test` before committing. `prepublishOnly`
+runs typecheck + test + build, so a broken tree cannot be published.
 
-### Gotcha: hook paths
+### Gotcha: dev vs. published paths
 
-Hook paths must point at a stable executable. The desktop app uses
-`electronHookArgv()` so packaged hooks run the app executable in
-`--rudder-hook claude|codex` mode without opening a window. Mismatching this
-silently breaks prompt capture because the fail-safe wrapper swallows hook
-errors.
+Code that resolves file paths relative to itself must work in **both** layouts:
+the `.ts` source tree (dev) and the compiled `.js` under `dist/` (published).
+`rudderArgv()` in `src/install.ts` is the canonical example — it derives the bin
+extension from the running module so `rudder init` writes a hook pointing at a
+file that actually exists in each case. Mismatching this silently breaks prompt
+capture (the hook fails and the fail-safe wrapper swallows the error).
 
 ## Pull request process
 
 1. Branch off `main` (never commit directly to `main`).
 2. Make the change; run the package checks via the `check-changed-folders` skill
-  (Codex equivalent of `/check`) — or directly: `npm run format`,
-   `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
-3. Commit, push, and open a PR with `gh pr create --base main`.
-4. After the PR opens, address any review comments with the `address-pr-comments`
-  skill (Codex equivalent of `/address-pr-comments`).
+   (Codex equivalent of `/check`) — or directly: `npm run typecheck`, `npm test`,
+   `npm run build`.
+3. If the change is user-facing or fixes a bug, bump the version in the same PR:
+   `npm version patch --no-git-tag-version` (use `--no-git-tag-version` so the
+   tag is cut later from `main`, not from the feature branch).
+4. Commit, push, and open a PR with `gh pr create --base main`.
+5. After the PR opens, address any review comments with the `address-pr-comments`
+   skill (Codex equivalent of `/address-pr-comments`).
 
 ## Continuous integration
 
-`.github/workflows/test.yml` runs `npm ci`, `npm run format`, `npm run lint`,
-`npm run typecheck`, `npm test`, and `npm run build` on every push. It is the
-gate that keeps `main` green; make it a **required status check** in branch
-protection so untested code can't merge.
-`.github/workflows/publish.yml` is now a desktop packaging and release workflow.
-On pushes to `main` it builds Linux, Windows, and macOS artifacts, then creates a
-draft GitHub Release when `package.json` has a version without a matching
-`v<version>` tag. It does not publish an npm package.
-`.github/workflows/release-alert.yml` posts a sticky PR comment when merging
-would create a new desktop release.
+`.github/workflows/test.yml` runs `npm ci`, `npm run typecheck`, `npm test`, and
+`npm run build` on every push. It is the gate that keeps `main` green; make it a
+**required status check** in branch protection so untested code can't merge.
+Testing deliberately lives here, separate from the publish flow (the archer
+`testing.yml` split) — `publish.yml` only builds and publishes.
+
+`.github/workflows/release-alert.yml` runs on every PR targeting `main` and posts
+a **sticky PR comment** when merging will publish a new release. It mirrors
+`publish.yml`'s exact condition — it reads the version from the PR branch's
+`package.json` and checks whether a `v<version>` tag already exists; if not, the
+comment warns that merging will ship `@vivekyy/rudder@<version>` to npm (and flips
+to a "no release on merge" note if the version isn't bumped). The comment is
+updated in place on each push (via a hidden `<!-- release-alert -->` marker) rather
+than duplicated.
+
+## Publishing to npm
+
+Publishing is **automatic on merge to `main`** — there is no manual tagging step.
+`.github/workflows/publish.yml` runs on every push to `main` as a single job whose
+steps:
+
+1. compute `v<version>` from `package.json`; if that tag already exists →
+   **no-op** (the merge didn't bump the version).
+2. otherwise `npm ci` then `npm publish` via a **Trusted Publisher (OIDC)** — there
+   is no `NPM_TOKEN` secret. The release path does **not** run tests itself — that's
+   `test.yml`'s job (see CI above). `npm publish` still runs `prepublishOnly`
+   (typecheck + test + build) as an intrinsic guard, so a broken tree can't ship.
+3. push the `v<version>` tag as the "shipped" marker, **after** a successful
+   publish (so a failed publish leaves no tag and a re-run retries cleanly).
+
+So the only way to release is to land a version bump (`npm version patch
+--no-git-tag-version`, see the PR process) on `main`. Forgetting to bump means
+nothing publishes (safe); you can never accidentally skip the publish after a bump.
+
+After a version-bump PR merges, verify the `Publish to npm` workflow succeeded and
+`npm view @vivekyy/rudder version` reflects the new release.
+
+Notes:
+- **The OIDC workflow is `publish.yml`** (unchanged from before). The Trusted
+  Publisher at npmjs.com -> package -> Settings -> Trusted Publisher must name
+  `publish.yml` — which is what it already is, so no reconfiguration is needed.
+- The git tag is created **after a successful publish**, so it is a marker, not the
+  trigger. Do **not** push `v*` tags by hand — and never run `npm version patch` on
+  `main` (it would bump a second time).
+- If a publish ever fails midway (e.g. a transient npm error), no tag is written;
+  re-run `Publish to npm` from the Actions tab (`workflow_dispatch`) and it retries.
 
 ## Installing / re-wiring hooks
 
-The desktop app's setup panel creates the DB and installs the Claude Code
-`UserPromptSubmit` hook (`~/.claude/settings.json`) and the Codex `notify`
-program (`~/.codex/config.toml`). Both point at the packaged Rudder executable in
-hook mode.
+`rudder init` creates the DB and installs the Claude Code `UserPromptSubmit` hook
+(`~/.claude/settings.json`) and the Codex `notify` program (`~/.codex/config.toml`).
+Both point at the absolute bin path of the rudder that ran `init`.
 
 Because each Conductor/git worktree is a separate checkout but `~/.claude/settings.json`
-is global, hooks must not point into a throwaway checkout. Prefer the packaged app
-or another stable executable path.
+is global, a hook pointing into a specific worktree breaks once that worktree is
+deleted. Prefer a **global install** (`npm i -g @vivekyy/rudder`) so the hook
+points at a stable path (`/opt/homebrew/bin/rudder`) that survives worktree churn.
 
 ## Skills
 
 ### Available skills
 
-- check-changed-folders: Run format/lint/typecheck/test/build for the package on
-the current branch and enforce `.claude/` / `.codex/` parity only when one of
-those folders changes. Use for `/check` requests and pre-PR validation. (file:
-.codex/skills/check-changed-folders/SKILL.md)
+- check-changed-folders: Run typecheck/test/build for the package on the current
+  branch and enforce Claude/Codex sync. Use for `/check` requests and pre-PR
+  validation. (file: .codex/skills/check-changed-folders/SKILL.md)
 - address-pr-comments: Fetch open review comments on the current branch's PR,
-dedupe them, and fix/decline/defer each with a written reason. Invoked
-automatically by `check-changed-folders` when a PR exists. (file:
-.codex/skills/address-pr-comments/SKILL.md)
+  dedupe them, and fix/decline/defer each with a written reason. Invoked
+  automatically by `check-changed-folders` when a PR exists. (file:
+  .codex/skills/address-pr-comments/SKILL.md)
 
 ### Trigger rules
 
 - If the user asks to run checks/tests/lint for the branch or references `/check`,
-use `check-changed-folders`.
+  use `check-changed-folders`.
 - If the user asks to address PR comments, fix Greptile findings, or references
-`/address-pr-comments`, use `address-pr-comments`.
+  `/address-pr-comments`, use `address-pr-comments`.
 
 ## Gitmoji
 
@@ -162,61 +168,58 @@ most specific emoji that fits the change.
 Note: `:zap:` and `:sparkles:` are swapped from the standard guide (`:zap:` = new
 features, `:sparkles:` = performance).
 
-
-| Emoji | Code                        | Description                              |
-| ----- | --------------------------- | ---------------------------------------- |
-| 🎨    | `:art:`                     | Improve structure / format of the code   |
-| ⚡️    | `:zap:`                     | Introduce new features                   |
-| 🔥    | `:fire:`                    | Remove code or files                     |
-| 🐛    | `:bug:`                     | Fix a bug                                |
-| 🚑️   | `:ambulance:`               | Critical hotfix                          |
-| ✨     | `:sparkles:`                | Improve performance                      |
-| 📝    | `:memo:`                    | Add or update documentation              |
-| 🚀    | `:rocket:`                  | Deploy stuff                             |
-| ✅     | `:white_check_mark:`        | Add, update, or pass tests               |
-| 🔒️   | `:lock:`                    | Fix security or privacy issues           |
-| 🔖    | `:bookmark:`                | Release / Version tags                   |
-| 🚨    | `:rotating_light:`          | Fix compiler / linter warnings           |
-| 🚧    | `:construction:`            | Work in progress                         |
-| 💚    | `:green_heart:`             | Fix CI Build                             |
-| ⬆️    | `:arrow_up:`                | Upgrade dependencies                     |
-| ⬇️    | `:arrow_down:`              | Downgrade dependencies                   |
-| 📌    | `:pushpin:`                 | Pin dependencies to specific versions    |
-| 👷    | `:construction_worker:`     | Add or update CI build system            |
-| ♻️    | `:recycle:`                 | Refactor code                            |
-| ➕     | `:heavy_plus_sign:`         | Add a dependency                         |
-| ➖     | `:heavy_minus_sign:`        | Remove a dependency                      |
-| 🔧    | `:wrench:`                  | Add or update configuration files        |
-| ✏️    | `:pencil2:`                 | Fix typos                                |
-| ⏪️    | `:rewind:`                  | Revert changes                           |
-| 📦️   | `:package:`                 | Add or update compiled files or packages |
-| 🚚    | `:truck:`                   | Move or rename resources                 |
-| 💥    | `:boom:`                    | Introduce breaking changes               |
-| 💡    | `:bulb:`                    | Add or update source code comments       |
-| 🗃️   | `:card_file_box:`           | Perform database related changes         |
-| 🔊    | `:loud_sound:`              | Add or update logs                       |
-| 🔇    | `:mute:`                    | Remove logs                              |
-| 🏷️   | `:label:`                   | Add or update types                      |
-| 🚩    | `:triangular_flag_on_post:` | Add, update, or remove feature flags     |
-| 🥅    | `:goal_net:`                | Catch errors                             |
-| 🗑️   | `:wastebasket:`             | Deprecate code needing cleanup           |
-| 🩹    | `:adhesive_bandage:`        | Simple fix for non-critical issue        |
-| ⚰️    | `:coffin:`                  | Remove dead code                         |
-| 🧪    | `:test_tube:`               | Add a failing test                       |
-| 🦺    | `:safety_vest:`             | Add or update validation code            |
-| 🙈    | `:see_no_evil:`             | Add or update a .gitignore file          |
-
+| Emoji | Code | Description |
+|-------|------|-------------|
+| 🎨 | `:art:` | Improve structure / format of the code |
+| ⚡️ | `:zap:` | Introduce new features |
+| 🔥 | `:fire:` | Remove code or files |
+| 🐛 | `:bug:` | Fix a bug |
+| 🚑️ | `:ambulance:` | Critical hotfix |
+| ✨ | `:sparkles:` | Improve performance |
+| 📝 | `:memo:` | Add or update documentation |
+| 🚀 | `:rocket:` | Deploy stuff |
+| ✅ | `:white_check_mark:` | Add, update, or pass tests |
+| 🔒️ | `:lock:` | Fix security or privacy issues |
+| 🔖 | `:bookmark:` | Release / Version tags |
+| 🚨 | `:rotating_light:` | Fix compiler / linter warnings |
+| 🚧 | `:construction:` | Work in progress |
+| 💚 | `:green_heart:` | Fix CI Build |
+| ⬆️ | `:arrow_up:` | Upgrade dependencies |
+| ⬇️ | `:arrow_down:` | Downgrade dependencies |
+| 📌 | `:pushpin:` | Pin dependencies to specific versions |
+| 👷 | `:construction_worker:` | Add or update CI build system |
+| ♻️ | `:recycle:` | Refactor code |
+| ➕ | `:heavy_plus_sign:` | Add a dependency |
+| ➖ | `:heavy_minus_sign:` | Remove a dependency |
+| 🔧 | `:wrench:` | Add or update configuration files |
+| ✏️ | `:pencil2:` | Fix typos |
+| ⏪️ | `:rewind:` | Revert changes |
+| 📦️ | `:package:` | Add or update compiled files or packages |
+| 🚚 | `:truck:` | Move or rename resources |
+| 💥 | `:boom:` | Introduce breaking changes |
+| 💡 | `:bulb:` | Add or update source code comments |
+| 🗃️ | `:card_file_box:` | Perform database related changes |
+| 🔊 | `:loud_sound:` | Add or update logs |
+| 🔇 | `:mute:` | Remove logs |
+| 🏷️ | `:label:` | Add or update types |
+| 🚩 | `:triangular_flag_on_post:` | Add, update, or remove feature flags |
+| 🥅 | `:goal_net:` | Catch errors |
+| 🗑️ | `:wastebasket:` | Deprecate code needing cleanup |
+| 🩹 | `:adhesive_bandage:` | Simple fix for non-critical issue |
+| ⚰️ | `:coffin:` | Remove dead code |
+| 🧪 | `:test_tube:` | Add a failing test |
+| 🦺 | `:safety_vest:` | Add or update validation code |
+| 🙈 | `:see_no_evil:` | Add or update a .gitignore file |
 
 (The full gitmoji set applies; this table lists the codes most common in this
-repo. See [https://gitmoji.dev](https://gitmoji.dev) for the rest.)
+repo. See https://gitmoji.dev for the rest.)
 
-## Claude / Codex Folder Parity
+## Claude / Codex parity
 
-Keep `.claude/` and `.codex/` automation instructions synchronized when either
-folder changes. This rule does not apply to root instruction files:
-`AGENTS.md` is the source of truth, while `CLAUDE.md` and `CODEX.md` intentionally
-only point to it.
+Keep Claude and Codex instructions synchronized. Any change to one side must be
+mirrored on the other in the same PR (the `check-changed-folders` skill enforces
+this as a gate):
 
+- `CLAUDE.md` <-> `AGENTS.md`
 - `.claude/commands/check.md` <-> `.codex/skills/check-changed-folders/SKILL.md`
 - `.claude/commands/address-pr-comments.md` <-> `.codex/skills/address-pr-comments/SKILL.md`
-

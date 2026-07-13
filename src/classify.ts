@@ -25,16 +25,12 @@ const CATEGORY_SET = new Set<Category>([...CATEGORIES, 'ignored']);
 const REACTION_SET = new Set<Reaction>(['agree', 'disagree', 'none']);
 
 export function normCategory(value: unknown): Category {
-  const v = String(value ?? '')
-    .trim()
-    .toLowerCase();
+  const v = String(value ?? '').trim().toLowerCase();
   return CATEGORY_SET.has(v as Category) ? (v as Category) : 'ignored';
 }
 
 export function normReaction(value: unknown): Reaction {
-  const v = String(value ?? '')
-    .trim()
-    .toLowerCase();
+  const v = String(value ?? '').trim().toLowerCase();
   return REACTION_SET.has(v as Reaction) ? (v as Reaction) : 'none';
 }
 

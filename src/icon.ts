@@ -1,4 +1,4 @@
-import { crc32, deflateSync } from 'node:zlib';
+import { deflateSync, crc32 } from 'node:zlib';
 
 /**
  * Generate the app icon as a PNG, with zero dependencies (built-in zlib only).
