@@ -1,7 +1,7 @@
-import { mkdirSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { mkdirSync } from 'node:fs';
 
 export type Source = 'claude' | 'codex';
 
@@ -29,19 +29,9 @@ export interface NewPrompt {
   ts?: string | Date;
 }
 
-let configuredHome: string | null = null;
-
-/** Point Rudder's local state at an app-owned directory before opening SQLite. */
-export function configureRudderHome(path: string): void {
-  if (_db && rudderHome() !== path) {
-    throw new Error('rudder database is already open; configure storage before calling openDb()');
-  }
-  configuredHome = path;
-}
-
 /** Root directory for all rudder state. Override with RUDDER_HOME (used by tests). */
 export function rudderHome(): string {
-  return configuredHome || process.env.RUDDER_HOME || join(homedir(), '.rudder');
+  return process.env.RUDDER_HOME || join(homedir(), '.rudder');
 }
 
 export function dbPath(): string {

@@ -1,17 +1,16 @@
 {
   "name": "@vivekyy/rudder",
-  "version": "1.1.1",
-  "description": "A local-first desktop app for AI coding prompts, stats, and daily digests.",
-  "private": true,
-  "desktopName": "Rudder",
+  "version": "0.2.0",
+  "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
   "type": "module",
-  "main": "dist/electron/main.js",
+  "bin": {
+    "rudder": "dist/bin/rudder.js"
+  },
   "engines": {
     "node": ">=23.6.0"
   },
   "files": [
     "dist",
-    "out",
     "README.md",
     "LICENSE"
   ],
@@ -22,8 +21,7 @@
     "codex",
     "prompts",
     "digest",
-    "electron",
-    "nextjs",
+    "cli",
     "productivity",
     "developer-tools"
   ],
@@ -37,73 +35,21 @@
   "bugs": {
     "url": "https://github.com/Vivekyy/Rudder/issues"
   },
-  "scripts": {
-    "format": "biome format .",
-    "format:fix": "biome format --write .",
-    "lint": "biome check --error-on-warnings .",
-    "lint:fix": "biome check --write --error-on-warnings .",
-    "typecheck": "tsc --noEmit",
-    "build:main": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json",
-    "build:renderer": "next build",
-    "build": "node -e \"const fs = require('node:fs'); for (const path of ['dist', 'out', '.next']) fs.rmSync(path, { recursive: true, force: true })\" && npm run build:main && npm run build:renderer",
-    "dev:renderer": "next dev",
-    "dev:electron": "npm run build:main && RUDDER_RENDERER_URL=http://localhost:3000 electron dist/electron/main.js",
-    "package": "npm run build && electron-builder",
-    "test": "node --test test/*.ts",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  "publishConfig": {
+    "access": "public"
   },
-  "build": {
-    "appId": "com.vivekyy.rudder",
-    "productName": "Rudder",
-    "executableName": "rudder",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "out/**/*",
-      "package.json",
-      "LICENSE",
-      "README.md"
-    ],
-    "extraMetadata": {
-      "main": "dist/electron/main.js"
-    },
-    "mac": {
-      "category": "public.app-category.developer-tools"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Development",
-      "syncDesktopName": true
-    },
-    "deb": {
-      "artifactName": "Rudder-${version}-${arch}.${ext}",
-      "packageName": "rudder"
-    },
-    "win": {
-      "target": "nsis"
-    }
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "node --test",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
-    "fix-path": "^5.0.0",
-    "next": "^16.2.9",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.1",
     "@types/node": "^24",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
     "@types/shell-quote": "^1.7.5",
-    "electron": "^41.7.1",
-    "electron-builder": "^26.15.3",
-    "node": "^26.3.1",
     "typescript": "^5.7.0"
   }
 }

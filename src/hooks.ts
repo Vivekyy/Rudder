@@ -53,7 +53,8 @@ export async function claudeHook(): Promise<void> {
   if (process.env.RUDDER_DISABLE) return; // skip our own `rudder digest` agent call
   const raw = await readStdin();
   const payload = safeParse(raw) ?? {};
-  const cwd = (payload.cwd as string) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const cwd =
+    (payload.cwd as string) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const id = insertPrompt({
     source: 'claude',
     prompt: payload.prompt as string,
@@ -73,7 +74,7 @@ export async function claudeHook(): Promise<void> {
  */
 export async function codexHook(argv: string[]): Promise<void> {
   if (process.env.RUDDER_DISABLE) return; // skip our own `rudder digest` agent call
-  let raw = argv.find((a) => a?.trim().startsWith('{'));
+  let raw = argv.find((a) => a && a.trim().startsWith('{'));
   if (!raw) raw = await readStdin();
   const payload = safeParse(raw ?? '') ?? {};
 
@@ -82,8 +83,11 @@ export async function codexHook(argv: string[]): Promise<void> {
 
   const messages =
     (payload['input-messages'] as unknown) ?? (payload.input_messages as unknown) ?? [];
-  const prompt = Array.isArray(messages) ? messages.join('\n').trim() : String(messages || '');
-  const cwd = (payload.cwd as string) || process.env.CODEX_WORKSPACE_ROOT || null;
+  const prompt = Array.isArray(messages)
+    ? messages.join('\n').trim()
+    : String(messages || '');
+  const cwd =
+    (payload.cwd as string) || process.env.CODEX_WORKSPACE_ROOT || null;
 
   const id = insertPrompt({
     source: 'codex',

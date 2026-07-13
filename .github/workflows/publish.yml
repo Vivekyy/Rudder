@@ -1,8 +1,18 @@
-name: Desktop Package
+name: Publish to npm
 
-# Builds the downloadable Rudder desktop app on main. If package.json's version
-# does not have a matching v<version> tag yet, the workflow creates a draft
-# GitHub Release and tags that commit as shipped.
+# Publishes @vivekyy/rudder to npm automatically on merge to main — no manual
+# tagging step. On every push to main this single job:
+#
+#   1. computes v<version> from package.json
+#   2. if that tag already exists -> no-op (the merge didn't bump the version)
+#   3. otherwise -> npm publish, then push the v<version> tag as the "shipped"
+#      marker (tagging AFTER publish, so a failed publish leaves no tag and a
+#      re-run retries cleanly)
+#
+# Auth uses npm Trusted Publishers (OIDC) — no NPM_TOKEN secret. This is the
+# workflow npm validates, so the Trusted Publisher at
+#   npmjs.com -> package -> Settings -> Trusted Publisher
+# must name `publish.yml`.
 on:
   push:
     branches:
@@ -10,265 +20,53 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: desktop-package
+  group: publish-to-npm
   cancel-in-progress: false
 
 jobs:
-  check-release:
+  publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-    outputs:
-      release: ${{ steps.check.outputs.release }}
-      version: ${{ steps.check.outputs.version }}
-      tag: ${{ steps.check.outputs.tag }}
-      previous_tag: ${{ steps.check.outputs.previous_tag }}
+      contents: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine whether this version needs releasing
+      - name: Determine whether this version needs publishing
         id: check
         run: |
           version="$(node -p "require('./package.json').version")"
           tag="v${version}"
-          previous_tag=""
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists - version unchanged, no release will be created."
-            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Tag ${tag} already exists — version unchanged, nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
           else
-            mapfile -t RELEASE_TAGS < <({ git tag -l 'v*'; echo "${tag}"; } | sort -V | uniq)
-
-            for index in "${!RELEASE_TAGS[@]}"; do
-              if [[ "${RELEASE_TAGS[$index]}" == "$tag" && "$index" -gt 0 ]]; then
-                previous_tag="${RELEASE_TAGS[$((index - 1))]}"
-                break
-              fi
-            done
-
-            echo "Tag ${tag} not found - will create a draft desktop release."
-            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${tag} not found — will publish and tag."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
-          echo "Previous tag: ${previous_tag:-none}"
-
-  package-linux:
-    needs: check-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: false
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.publish == 'true'
         with:
           node-version: 24
+          registry-url: 'https://registry.npmjs.org'
 
-      - run: npm ci
+      # Trusted Publishers (OIDC) needs npm >= 11.5.1, newer than what the
+      # runner ships. Provenance is generated automatically for public packages.
+      - if: steps.check.outputs.publish == 'true'
+        run: npm install -g npm@latest
 
-      - run: npm run package -- --linux --publish never
+      - if: steps.check.outputs.publish == 'true'
+        run: npm ci
 
-      - name: Prepare Linux release artifacts
+      - if: steps.check.outputs.publish == 'true'
+        run: npm publish
+
+      - name: Tag the published release
+        if: steps.check.outputs.publish == 'true'
         run: |
-          rm -rf release/*-unpacked
-          mkdir -p artifacts
-          shopt -s nullglob
-
-          for file in release/*.AppImage release/*.AppImage.blockmap release/*.deb release/*-linux.yml; do
-            if [[ -f "$file" ]]; then
-              cp "$file" artifacts/
-            fi
-          done
-
-          for file in release/*.AppImage; do
-            arch=$(basename "$file" | sed -E 's/.*-([^-]+)\.AppImage$/\1/')
-            if [[ "$arch" =~ ^[0-9]+\.[0-9]+\.[0-9] || "$arch" == "$(basename "$file")" ]]; then
-              arch="x64"
-            fi
-            cp "$file" "artifacts/Rudder-${arch}.AppImage"
-            echo "Created stable copy: Rudder-${arch}.AppImage"
-          done
-
-          for file in release/*-linux.yml; do
-            if [[ "$(basename "$file")" != "latest-linux.yml" ]]; then
-              cp "$file" "artifacts/latest-linux.yml"
-              echo "Created stable copy: latest-linux.yml"
-              break
-            fi
-          done
-
-          ls -la artifacts
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rudder-linux
-          path: artifacts/*
-
-  package-windows:
-    needs: check-release
-    runs-on: windows-latest
-    permissions:
-      contents: read
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: false
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - run: npm ci
-
-      - run: npm run package -- --win nsis --publish never
-
-      - name: Prepare Windows release artifacts
-        shell: bash
-        run: |
-          rm -rf release/*-unpacked
-          mkdir -p artifacts
-          shopt -s nullglob
-
-          for file in release/*.exe release/*.exe.blockmap release/latest.yml; do
-            if [[ -f "$file" ]]; then
-              cp "$file" artifacts/
-            fi
-          done
-
-          for file in release/*.exe; do
-            cp "$file" artifacts/Rudder-x64-Setup.exe
-            echo "Created stable copy: Rudder-x64-Setup.exe"
-            break
-          done
-
-          ls -la artifacts
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rudder-windows
-          path: artifacts/*
-
-  package-macos:
-    needs: check-release
-    runs-on: macos-26
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: false
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - run: npm ci
-
-      - run: npm run package -- --mac dmg zip --${{ matrix.arch }} --publish never
-
-      - name: Prepare macOS release artifacts
-        run: |
-          rm -rf release/*-unpacked
-          mkdir -p artifacts
-          shopt -s nullglob
-
-          for file in release/*.dmg release/*.dmg.blockmap release/*.zip release/*.zip.blockmap; do
-            if [[ -f "$file" ]]; then
-              cp "$file" artifacts/
-            fi
-          done
-
-          for file in release/latest-mac.yml; do
-            cp "$file" "artifacts/latest-mac-${{ matrix.arch }}.yml"
-            echo "Created arch-specific copy: latest-mac-${{ matrix.arch }}.yml"
-            break
-          done
-
-          for file in release/*.dmg; do
-            cp "$file" "artifacts/Rudder-${{ matrix.arch }}.dmg"
-            echo "Created stable copy: Rudder-${{ matrix.arch }}.dmg"
-            break
-          done
-
-          for file in release/*.zip; do
-            if [[ "$(basename "$file")" != *blockmap ]]; then
-              cp "$file" "artifacts/Rudder-${{ matrix.arch }}-mac.zip"
-              echo "Created stable copy: Rudder-${{ matrix.arch }}-mac.zip"
-              break
-            fi
-          done
-
-          ls -la artifacts
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rudder-macos-${{ matrix.arch }}
-          path: artifacts/*
-
-  publish-release:
-    needs:
-      - check-release
-      - package-linux
-      - package-windows
-      - package-macos
-    if: needs.check-release.outputs.release == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - uses: actions/download-artifact@v8
-        with:
-          path: release-artifacts
-          merge-multiple: true
-
-      - name: List release artifacts
-        run: ls -la release-artifacts
-
-      - name: Generate release notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PREVIOUS_TAG="${{ needs.check-release.outputs.previous_tag }}"
-          CURRENT_TAG="${{ needs.check-release.outputs.tag }}"
-
-          if [[ -n "$PREVIOUS_TAG" ]]; then
-            gh api "repos/${{ github.repository }}/releases/generate-notes" \
-              -f tag_name="$CURRENT_TAG" \
-              -f target_commitish="$GITHUB_SHA" \
-              -f previous_tag_name="$PREVIOUS_TAG" \
-              --jq ".body" > release_notes.md
-          else
-            gh api "repos/${{ github.repository }}/releases/generate-notes" \
-              -f tag_name="$CURRENT_TAG" \
-              -f target_commitish="$GITHUB_SHA" \
-              --jq ".body" > release_notes.md
-          fi
-
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          shopt -s nullglob
-          artifacts=(release-artifacts/*)
-
-          gh release create "${{ needs.check-release.outputs.tag }}" \
-            "${artifacts[@]}" \
-            --title "Rudder Desktop ${{ needs.check-release.outputs.tag }}" \
-            --notes-file release_notes.md \
-            --target "$GITHUB_SHA" \
-            --draft
+          git tag "${{ steps.check.outputs.tag }}"
+          git push origin "${{ steps.check.outputs.tag }}"
