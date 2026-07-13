@@ -9,7 +9,7 @@ const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
 const DISABLE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 export function telemetryDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return ['RUDDER_TELEMETRY_DISABLED', 'RUDDER_DISABLE_TELEMETRY', 'DO_NOT_TRACK'].some((name) =>
+  return ['RUDDER_DISABLE_TELEMETRY', 'DO_NOT_TRACK'].some((name) =>
     DISABLE_VALUES.has((env[name] ?? '').trim().toLowerCase())
   );
 }

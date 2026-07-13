@@ -177,7 +177,6 @@ test('telemetryDisabled honors rudder and standard opt-out environment flags', a
   const { telemetryDisabled } = await import('../src/telemetry.ts');
 
   assert.equal(telemetryDisabled({}), false);
-  assert.equal(telemetryDisabled({ RUDDER_TELEMETRY_DISABLED: '1' }), true);
   assert.equal(telemetryDisabled({ RUDDER_DISABLE_TELEMETRY: ' true ' }), true);
   assert.equal(telemetryDisabled({ DO_NOT_TRACK: 'yes' }), true);
   assert.equal(telemetryDisabled({ DO_NOT_TRACK: '0' }), false);
