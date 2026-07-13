@@ -74,12 +74,16 @@ jobs:
             echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
           } > "${npmrc}"
 
-          if NPM_CONFIG_USERCONFIG="${npmrc}" npm view "${name}@${version}" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+          if github_view_output="$(NPM_CONFIG_USERCONFIG="${npmrc}" npm view "${name}@${version}" version --registry=https://npm.pkg.github.com 2>&1)"; then
             echo "GitHub Packages already has ${name}@${version}."
             github_publish=false
-          else
+          elif [[ "${github_view_output}" == *"E404"* || "${github_view_output}" == *"404 Not Found"* ]]; then
             echo "GitHub Packages is missing ${name}@${version} — will publish."
             github_publish=true
+          else
+            echo "::error::Could not determine whether GitHub Packages has ${name}@${version}."
+            printf '%s\n' "${github_view_output}"
+            exit 1
           fi
           echo "github_publish=${github_publish}" >> "$GITHUB_OUTPUT"
 
@@ -89,12 +93,16 @@ jobs:
             echo "publish=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if gh release view "${tag}" >/dev/null 2>&1; then
+          if release_view_output="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2>&1)"; then
             echo "GitHub Release ${tag} already exists."
             echo "github_release=false" >> "$GITHUB_OUTPUT"
-          else
+          elif [[ "${release_view_output}" == *"HTTP 404"* ]]; then
             echo "GitHub Release ${tag} is missing — will create it after package publishing succeeds."
             echo "github_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Could not determine whether GitHub Release ${tag} exists."
+            printf '%s\n' "${release_view_output}"
+            exit 1
           fi
 
       - uses: actions/setup-node@v4
