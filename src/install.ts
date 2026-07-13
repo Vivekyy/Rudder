@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { quote } from 'shell-quote';
 import { openDb, dbPath } from './db.ts';
+import { capture } from './telemetry.ts';
 
 /**
  * Resolve the rudder bin path for the module at `moduleUrl`, matching the bin's
@@ -95,9 +96,17 @@ function installCodexHook(): string {
 
 export function init(): void {
   openDb();
+  const claudeResult = installClaudeHook();
+  const codexResult = installCodexHook();
   console.log(`rudder: database ready → ${dbPath()}`);
-  console.log(`rudder: claude hook  ${installClaudeHook()}`);
-  console.log(`rudder: codex hook   ${installCodexHook()}`);
+  console.log(`rudder: claude hook  ${claudeResult}`);
+  console.log(`rudder: codex hook   ${codexResult}`);
   console.log('\nDone. New prompts in Claude Code and Codex will now be recorded.');
   console.log('Run `rudder digest` at the end of the day to summarize your work.');
+  capture('rudder initialized', {
+    claude_hook: claudeResult.startsWith('installed'),
+    codex_hook: codexResult.startsWith('installed'),
+    node_version: process.version,
+    platform: process.platform,
+  });
 }

@@ -2,6 +2,7 @@ import { promptsForDay, type PromptRow } from './db.ts';
 import { untaggedPromptsForDay, upsertTag, TAGGER_VERSION } from './tags.ts';
 import { runAgent, resolveAgent, type Agent } from './agent.ts';
 import { CLASSIFICATION_RUBRIC, normCategory, normReaction, type Category, type Reaction } from './classify.ts';
+import { capture } from './telemetry.ts';
 
 export interface ParsedTag {
   id: number;
@@ -83,6 +84,11 @@ export function tagDay(day: string, agent: Agent): number {
     upsertTag(t.id, t.category, t.reaction, agent, TAGGER_VERSION);
     n++;
   }
+  capture('prompts tagged', {
+    count: n,
+    requested: toTag.length,
+    agent,
+  });
   return n;
 }
 

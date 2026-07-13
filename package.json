@@ -1,6 +1,6 @@
 {
   "name": "@vivekyy/rudder",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
   "type": "module",
   "bin": {
@@ -38,10 +38,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "node --test",
+    "test": "node --test test/*.ts",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
+    "posthog-node": "^5.41.0",
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
