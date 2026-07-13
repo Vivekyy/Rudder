@@ -6,10 +6,9 @@ import { rudderHome } from './db.ts';
 
 const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || '';
 const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
-const DISABLE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 export function telemetryDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return DISABLE_VALUES.has((env.DO_NOT_TRACK ?? '').trim().toLowerCase());
+  return env.DO_NOT_TRACK === '1';
 }
 
 /** Read or generate a stable anonymous installation ID. */
