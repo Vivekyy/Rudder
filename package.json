@@ -30,13 +30,10 @@
   "homepage": "https://github.com/Vivekyy/Rudder#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Vivekyy/Rudder.git"
+    "url": "https://github.com/Vivekyy/Rudder.git"
   },
   "bugs": {
     "url": "https://github.com/Vivekyy/Rudder/issues"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

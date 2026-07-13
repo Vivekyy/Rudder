@@ -1,16 +1,18 @@
-name: Publish to npm
+name: Publish packages and releases
 
-# Publishes @vivekyy/rudder to npm automatically on merge to main — no manual
-# tagging step. On every push to main this single job:
+# Publishes @vivekyy/rudder to npmjs.org and GitHub Packages, then creates the
+# GitHub Release, automatically on merge to main — no manual tagging step. On
+# every push to main this single job:
 #
-#   1. computes v<version> from package.json
-#   2. if that tag already exists -> no-op (the merge didn't bump the version)
-#   3. otherwise -> npm publish, then push the v<version> tag as the "shipped"
-#      marker (tagging AFTER publish, so a failed publish leaves no tag and a
-#      re-run retries cleanly)
+#   1. computes v<version> from package.json.
+#   2. publishes to npmjs.org if that tag does not exist.
+#   3. publishes to GitHub Packages if that registry is missing the version.
+#   4. pushes the v<version> tag, if needed, only after both registries are
+#      satisfied.
+#   5. creates the GitHub Release for the version if it is missing.
 #
-# Auth uses npm Trusted Publishers (OIDC) — no NPM_TOKEN secret. This is the
-# workflow npm validates, so the Trusted Publisher at
+# npmjs.org auth uses npm Trusted Publishers (OIDC) — no NPM_TOKEN secret. This
+# is the workflow npm validates, so the Trusted Publisher at
 #   npmjs.com -> package -> Settings -> Trusted Publisher
 # must name `publish.yml`.
 on:
@@ -20,7 +22,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: publish-to-npm
+  group: publish-packages
   cancel-in-progress: false
 
 jobs:
@@ -29,44 +31,116 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine whether this version needs publishing
+      - name: Determine which registries need publishing
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="$(node -p "require('./package.json').version")"
+          name="$(node -p "require('./package.json').name")"
           tag="v${version}"
+          if [[ "${name}" != @*/* ]]; then
+            echo "::error::GitHub Packages requires a scoped package name; got ${name}."
+            exit 1
+          fi
+
+          scope="${name%%/*}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "scope=${scope}" >> "$GITHUB_OUTPUT"
+
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists — version unchanged, nothing to publish."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Tag ${tag} already exists — npmjs.org release already shipped."
+            npm_publish=false
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Tag ${tag} not found — will publish and tag."
+            echo "Tag ${tag} not found — will publish to npmjs.org and tag after success."
+            npm_publish=true
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "npm_publish=${npm_publish}" >> "$GITHUB_OUTPUT"
+
+          npmrc="${RUNNER_TEMP}/github-packages.npmrc"
+          {
+            echo "${scope}:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
+          } > "${npmrc}"
+
+          if NPM_CONFIG_USERCONFIG="${npmrc}" npm view "${name}@${version}" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "GitHub Packages already has ${name}@${version}."
+            github_publish=false
+          else
+            echo "GitHub Packages is missing ${name}@${version} — will publish."
+            github_publish=true
+          fi
+          echo "github_publish=${github_publish}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${npm_publish}" == "true" || "${github_publish}" == "true" ]]; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "GitHub Release ${tag} already exists."
+            echo "github_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "GitHub Release ${tag} is missing — will create it after package publishing succeeds."
+            echo "github_release=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-node@v4
         if: steps.check.outputs.publish == 'true'
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
 
       # Trusted Publishers (OIDC) needs npm >= 11.5.1, newer than what the
-      # runner ships. Provenance is generated automatically for public packages.
+      # runner ships.
       - if: steps.check.outputs.publish == 'true'
         run: npm install -g npm@latest
 
       - if: steps.check.outputs.publish == 'true'
         run: npm ci
 
-      - if: steps.check.outputs.publish == 'true'
-        run: npm publish
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.npm_publish == 'true'
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npmjs.org
+        if: steps.check.outputs.npm_publish == 'true'
+        run: npm publish --access public --registry=https://registry.npmjs.org
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.github_publish == 'true'
+        with:
+          node-version: 24
+          registry-url: 'https://npm.pkg.github.com'
+          scope: ${{ steps.check.outputs.scope }}
+
+      - name: Publish to GitHub Packages
+        if: steps.check.outputs.github_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm publish --registry=https://npm.pkg.github.com
 
       - name: Tag the published release
-        if: steps.check.outputs.publish == 'true'
+        if: steps.check.outputs.tag_exists == 'false'
         run: |
           git tag "${{ steps.check.outputs.tag }}"
           git push origin "${{ steps.check.outputs.tag }}"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.github_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ steps.check.outputs.tag }}" --verify-tag --title "${{ steps.check.outputs.tag }}" --generate-notes
