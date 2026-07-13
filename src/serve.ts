@@ -9,6 +9,7 @@ import { ensureTagged } from './tagger.ts';
 import { resolveAgent, type Agent } from './agent.ts';
 import { PAGE_HTML, INSTALL_HTML, MANIFEST, SERVICE_WORKER } from './ui.ts';
 import { pngIcon } from './icon.ts';
+import { capture, captureException } from './telemetry.ts';
 
 export interface ServeOptions {
   agent?: Agent;
@@ -216,11 +217,17 @@ export function serve(opts: ServeOptions = {}): void {
       if (!opts.noOpen) openDashboard(url);
       process.exit(0);
     }
+    captureException(err);
     throw err;
   });
 
   server.listen(port, '127.0.0.1', () => {
     console.log(`rudder: dashboard at ${url} (Ctrl-C to stop)`);
+    capture('dashboard started', {
+      has_agent: agent !== undefined,
+      no_open: opts.noOpen === true,
+      platform: process.platform,
+    });
     // Open first, then backfill. The tag pass is synchronous (spawnSync) and
     // briefly blocks the event loop, so we defer it a beat to let the freshly
     // opened page load its assets before the daemon goes busy classifying.

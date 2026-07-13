@@ -5,6 +5,7 @@ import { serve } from './serve.ts';
 import { ensureTagged } from './tagger.ts';
 import { statsForDay, untaggedPromptsForDay, type DayStats } from './tags.ts';
 import { localDay } from './db.ts';
+import { capture, captureException, shutdown } from './telemetry.ts';
 
 const HELP = `rudder — record your AI coding prompts and digest your day.
 
@@ -104,6 +105,7 @@ async function runHookSafely(fn: () => Promise<void>): Promise<void> {
   } catch (err) {
     process.stderr.write(`rudder hook error (ignored): ${(err as Error).message}\n`);
   }
+  await shutdown();
   process.exit(0);
 }
 
@@ -113,6 +115,7 @@ export async function main(argv: string[]): Promise<void> {
   switch (cmd) {
     case 'init':
       init();
+      await shutdown();
       return;
 
     case 'hook': {
@@ -142,8 +145,19 @@ export async function main(argv: string[]): Promise<void> {
           cmd === 'tag' || flags['no-tag'] !== 'true'
             ? ensureTagged(day, agent)
             : untaggedPromptsForDay(day).length;
-        process.stdout.write(formatStats(day, statsForDay(day), remaining) + '\n');
+        const s = statsForDay(day);
+        process.stdout.write(formatStats(day, s, remaining) + '\n');
+        capture('stats viewed', {
+          command: cmd,
+          day,
+          total: s.total,
+          counted: s.counted,
+          no_tag: flags['no-tag'] === 'true',
+        });
+        await shutdown();
       } catch (err) {
+        captureException(err);
+        await shutdown();
         console.error(`rudder: ${(err as Error).message}`);
         process.exit(1);
       }
@@ -155,7 +169,10 @@ export async function main(argv: string[]): Promise<void> {
       const agent = parseAgentFlag(flags.agent);
       try {
         digest({ day: flags.date, agent, out: flags.out });
+        await shutdown();
       } catch (err) {
+        captureException(err);
+        await shutdown();
         console.error(`rudder: ${(err as Error).message}`);
         process.exit(1);
       }

@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import { insertPrompt, rudderPort } from './db.ts';
+import { capture } from './telemetry.ts';
 
 /**
  * Best-effort ping to the `rudder start` dashboard so it tags the new prompt and
@@ -55,16 +56,25 @@ export async function claudeHook(): Promise<void> {
   const payload = safeParse(raw) ?? {};
   const cwd =
     (payload.cwd as string) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const project = projectFromCwd(cwd);
+  const model = (payload.model as string) ?? null;
   const id = insertPrompt({
     source: 'claude',
     prompt: payload.prompt as string,
     session_id: payload.session_id as string,
     cwd,
-    project: projectFromCwd(cwd),
-    model: (payload.model as string) ?? null,
+    project,
+    model,
     raw,
   });
-  if (id !== null) await notifyDashboard();
+  if (id !== null) {
+    await notifyDashboard();
+    capture('prompt recorded', {
+      source: 'claude',
+      has_project: project !== null,
+      has_model: model !== null,
+    });
+  }
 }
 
 /**
@@ -89,6 +99,8 @@ export async function codexHook(argv: string[]): Promise<void> {
   const cwd =
     (payload.cwd as string) || process.env.CODEX_WORKSPACE_ROOT || null;
 
+  const project = projectFromCwd(cwd);
+  const model = (payload.model as string) ?? null;
   const id = insertPrompt({
     source: 'codex',
     prompt,
@@ -98,9 +110,16 @@ export async function codexHook(argv: string[]): Promise<void> {
       (payload.session_id as string) ??
       null,
     cwd,
-    project: projectFromCwd(cwd),
-    model: (payload.model as string) ?? null,
+    project,
+    model,
     raw,
   });
-  if (id !== null) await notifyDashboard();
+  if (id !== null) {
+    await notifyDashboard();
+    capture('prompt recorded', {
+      source: 'codex',
+      has_project: project !== null,
+      has_model: model !== null,
+    });
+  }
 }
