@@ -9,9 +9,7 @@ const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
 const DISABLE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 export function telemetryDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return ['RUDDER_DISABLE_TELEMETRY', 'DO_NOT_TRACK'].some((name) =>
-    DISABLE_VALUES.has((env[name] ?? '').trim().toLowerCase())
-  );
+  return DISABLE_VALUES.has((env.DO_NOT_TRACK ?? '').trim().toLowerCase());
 }
 
 /** Read or generate a stable anonymous installation ID. */

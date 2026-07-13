@@ -173,12 +173,12 @@ test('parseTags tolerates fences/prose and normalizes categories', async () => {
   assert.deepEqual(parseTags('no array here'), []);
 });
 
-test('telemetryDisabled honors rudder and standard opt-out environment flags', async () => {
+test('telemetryDisabled honors DO_NOT_TRACK opt-out values', async () => {
   const { telemetryDisabled } = await import('../src/telemetry.ts');
 
   assert.equal(telemetryDisabled({}), false);
-  assert.equal(telemetryDisabled({ RUDDER_DISABLE_TELEMETRY: ' true ' }), true);
   assert.equal(telemetryDisabled({ DO_NOT_TRACK: 'yes' }), true);
+  assert.equal(telemetryDisabled({ DO_NOT_TRACK: ' true ' }), true);
   assert.equal(telemetryDisabled({ DO_NOT_TRACK: '0' }), false);
 });
 
