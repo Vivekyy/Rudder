@@ -1,4 +1,4 @@
-import { promptsForDay, type PromptRow } from './db.ts';
+import { promptsForDay, type PromptRow } from './db/index.ts';
 import { untaggedPromptsForDay, upsertTag, TAGGER_VERSION } from './tags.ts';
 import { runAgent, resolveAgent, type Agent } from './agent.ts';
 import { CLASSIFICATION_RUBRIC, normCategory, normReaction, type Category, type Reaction } from './classify.ts';

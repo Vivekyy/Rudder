@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { localDay, rudderPort } from './db.ts';
+import { localDay, rudderPort } from './db/index.ts';
 import { statsForDay } from './tags.ts';
 import { ensureTagged } from './tagger.ts';
 import { ensureCompiled } from './compiler.ts';

@@ -4,7 +4,7 @@ import { digest, type Agent } from './digest.ts';
 import { serve } from './serve.ts';
 import { ensureTagged } from './tagger.ts';
 import { statsForDay, untaggedPromptsForDay, type DayStats } from './tags.ts';
-import { localDay } from './db.ts';
+import { localDay } from './db/index.ts';
 import { ensureCompiled } from './compiler.ts';
 import { allActiveRules } from './rules.ts';
 import { capture, captureException, shutdown } from './telemetry.ts';

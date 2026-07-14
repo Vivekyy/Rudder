@@ -3,7 +3,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { quote } from 'shell-quote';
-import { openDb, dbPath } from './db.ts';
+import { openDb, dbPath } from './db/index.ts';
 import { capture } from './telemetry.ts';
 
 /**

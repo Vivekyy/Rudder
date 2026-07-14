@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { promptsForDay, localDay, type PromptRow } from './db.ts';
+import { promptsForDay, localDay, type PromptRow } from './db/index.ts';
 import { statsForDay, categoryMapForDay, type DayStats } from './tags.ts';
 import { ensureTagged } from './tagger.ts';
 import { runAgent, resolveAgent, type Agent } from './agent.ts';

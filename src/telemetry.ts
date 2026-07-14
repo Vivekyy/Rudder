@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { PostHog } from 'posthog-node';
-import { rudderHome } from './db.ts';
+import { rudderHome } from './db/index.ts';
 
 const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || '';
 const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';

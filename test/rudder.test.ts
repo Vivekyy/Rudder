@@ -16,7 +16,7 @@ after(() => {
 });
 
 test('insertPrompt stores and queries by local day; blanks are skipped', async () => {
-  const { insertPrompt, promptsForDay, localDay } = await import('../src/db.ts');
+  const { insertPrompt, promptsForDay, localDay } = await import('../src/db/index.ts');
 
   const id = insertPrompt({
     source: 'claude',
@@ -66,7 +66,7 @@ test('rudderBinPath matches the bin extension to the loading module', async () =
 });
 
 test('claude hook parses stdin JSON into a row', async () => {
-  const { promptsForDay, localDay } = await import('../src/db.ts');
+  const { promptsForDay, localDay } = await import('../src/db/index.ts');
   const { claudeHook } = await import('../src/hooks.ts');
 
   const payload = JSON.stringify({
@@ -94,7 +94,7 @@ test('claude hook parses stdin JSON into a row', async () => {
 });
 
 test('statsForDay counts untagged prompts as ignored, then reflects tags', async () => {
-  const { insertPrompt, localDay } = await import('../src/db.ts');
+  const { insertPrompt, localDay } = await import('../src/db/index.ts');
   const { upsertTag, statsForDay, untaggedPromptsForDay } = await import('../src/tags.ts');
 
   const when = new Date('2020-03-04T12:00:00'); // local noon → stable local day
@@ -138,7 +138,7 @@ test('statsForDay counts untagged prompts as ignored, then reflects tags', async
 });
 
 test('untaggedPromptsForDay treats a tag from another version as untagged', async () => {
-  const { insertPrompt, localDay } = await import('../src/db.ts');
+  const { insertPrompt, localDay } = await import('../src/db/index.ts');
   const { upsertTag, untaggedPromptsForDay, TAGGER_VERSION } = await import('../src/tags.ts');
 
   const when = new Date('2020-05-06T12:00:00');
@@ -255,7 +255,7 @@ test('transcript reader extracts the latest user and assistant text', async () =
 });
 
 test('rule lifecycle stores versions and renders project-aware context', async () => {
-  const { insertPrompt, localDay } = await import('../src/db.ts');
+  const { insertPrompt, localDay } = await import('../src/db/index.ts');
   const {
     queueTraceEvent,
     pendingTraceEvents,
@@ -347,7 +347,7 @@ test('compiler parser rejects malformed lifecycle output', async () => {
 });
 
 test('compilation rolls back all candidates when one lifecycle action fails', async () => {
-  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { insertPrompt, openDb } = await import('../src/db/index.ts');
   const { queueTraceEvent, pendingTraceEvents, applyCompilation } = await import('../src/rules.ts');
   const promptId = insertPrompt({
     source: 'claude',
@@ -385,7 +385,7 @@ test('compilation rolls back all candidates when one lifecycle action fails', as
 });
 
 test('compilation applies only the last candidate for a repeated existing rule target', async () => {
-  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { insertPrompt, openDb } = await import('../src/db/index.ts');
   const { queueTraceEvent, pendingTraceEvents, applyRuleCandidate, applyCompilation, activeRules } =
     await import('../src/rules.ts');
   const firstPromptId = insertPrompt({
@@ -455,7 +455,7 @@ test('compilation applies only the last candidate for a repeated existing rule t
 });
 
 test('compilation rejects mixed actions for a repeated existing rule target', async () => {
-  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { insertPrompt, openDb } = await import('../src/db/index.ts');
   const { queueTraceEvent, pendingTraceEvents, applyRuleCandidate, applyCompilation, activeRules } =
     await import('../src/rules.ts');
   const firstPromptId = insertPrompt({
@@ -530,7 +530,7 @@ test('compilation rejects mixed actions for a repeated existing rule target', as
 });
 
 test('completed trace events are not reprocessed by stale workers', async () => {
-  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { insertPrompt, openDb } = await import('../src/db/index.ts');
   const { queueTraceEvent, pendingTraceEvents, claimTraceEvent, markTraceEvent, applyCompilation } =
     await import('../src/rules.ts');
   const promptId = insertPrompt({
@@ -622,7 +622,7 @@ test('completed trace events are not reprocessed by stale workers', async () => 
 });
 
 test('codex native UserPromptSubmit hook records stdin payload', async () => {
-  const { promptsForDay, localDay } = await import('../src/db.ts');
+  const { promptsForDay, localDay } = await import('../src/db/index.ts');
   const { codexHook } = await import('../src/hooks.ts');
   const payload = JSON.stringify({
     session_id: 's-codex',

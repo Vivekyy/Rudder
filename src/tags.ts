@@ -1,6 +1,5 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
-import { rudderDb, type PromptRow } from './db.ts';
-import { promptTags, prompts } from './schema.ts';
+import { promptTags, prompts, rudderDb, type PromptRow } from './db/index.ts';
 import {
   CATEGORIES,
   normCategory,

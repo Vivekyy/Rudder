@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { insertPrompt, rudderPort, type Source } from './db.ts';
+import { insertPrompt, rudderPort, type Source } from './db/index.ts';
 import { queueTraceEvent, renderRuleContext } from './rules.ts';
 import { readTranscriptContext } from './transcript.ts';
 import { capture } from './telemetry.ts';

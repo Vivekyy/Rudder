@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
-import { rudderDb, type PromptRow } from './db.ts';
-import { memoryRules, prompts, ruleEvidence, traceEvents } from './schema.ts';
+import {
+  memoryRules,
+  prompts,
+  rudderDb,
+  ruleEvidence,
+  traceEvents,
+  type PromptRow,
+} from './db/index.ts';
 
 export type RuleKind = 'preference' | 'pitfall' | 'friction';
 export type RuleScope = 'global' | 'project';
