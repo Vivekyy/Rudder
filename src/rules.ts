@@ -169,18 +169,16 @@ export function markTraceEvent(
 }
 
 export function activeRules(projectKey?: string | null): MemoryRule[] {
+  const projectClause = projectKey
+    ? or(
+        eq(memoryRules.scope, 'global'),
+        and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey))
+      )
+    : eq(memoryRules.scope, 'global');
   return rudderDb()
     .select()
     .from(memoryRules)
-    .where(
-      and(
-        eq(memoryRules.status, 'active'),
-        or(
-          eq(memoryRules.scope, 'global'),
-          and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey ?? null))
-        )
-      )
-    )
+    .where(and(eq(memoryRules.status, 'active'), projectClause))
     .orderBy(
       sql`CASE ${memoryRules.kind} WHEN 'pitfall' THEN 0 WHEN 'preference' THEN 1 ELSE 2 END`,
       asc(memoryRules.atomic_id)
@@ -220,6 +218,12 @@ function activeRuleByAtomicId(
   projectKey: string | null,
   db: RuleDb = rudderDb()
 ): MemoryRule | null {
+  const projectClause = projectKey
+    ? or(
+        eq(memoryRules.scope, 'global'),
+        and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey))
+      )
+    : eq(memoryRules.scope, 'global');
   return (
     (db
       .select()
@@ -228,10 +232,7 @@ function activeRuleByAtomicId(
         and(
           eq(memoryRules.atomic_id, atomicId),
           eq(memoryRules.status, 'active'),
-          or(
-            eq(memoryRules.scope, 'global'),
-            and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey))
-          )
+          projectClause
         )
       )
       .orderBy(sql`${memoryRules.version} DESC`)

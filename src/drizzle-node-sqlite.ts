@@ -14,7 +14,7 @@ import {
   type SQLiteExecuteMethod,
   type SQLiteTransactionConfig,
 } from 'drizzle-orm/sqlite-core/session';
-import { mapResultRow, type DrizzleConfig } from 'drizzle-orm/utils';
+import { mapResultRow } from 'drizzle-orm/utils';
 import type { RelationalSchemaConfig, TablesRelationalConfig } from 'drizzle-orm/relations';
 import type { WithCacheConfig } from 'drizzle-orm/cache/core/types';
 
@@ -23,6 +23,18 @@ type NodeSQLiteRunResult = StatementResultingChanges;
 interface NodeSQLiteSessionOptions {
   logger?: Logger;
   cache?: Cache;
+}
+
+interface DrizzleConfig<TSchema extends Record<string, unknown>> extends NodeSQLiteSessionOptions {
+  schema?: TSchema;
+  casing?: 'snake_case' | 'camelCase';
+  logger?: boolean | Logger;
+}
+
+type SQLiteParam = null | number | bigint | string | NodeJS.ArrayBufferView;
+
+function bindParams(params: unknown[]): SQLiteParam[] {
+  return params as SQLiteParam[];
 }
 
 type NodeSQLiteDatabase<TSchema extends Record<string, unknown>> = BaseSQLiteDatabase<
@@ -158,13 +170,13 @@ class NodeSQLitePreparedQuery<
   }
 
   run(placeholderValues?: Record<string, unknown>): NodeSQLiteRunResult {
-    const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
+    const params = bindParams(fillPlaceholders(this.query.params, placeholderValues ?? {}));
     this.logger.logQuery(this.query.sql, params);
     return this.stmt.run(...params);
   }
 
   all(placeholderValues?: Record<string, unknown>): T['all'] {
-    const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
+    const params = bindParams(fillPlaceholders(this.query.params, placeholderValues ?? {}));
     this.logger.logQuery(this.query.sql, params);
     const rows = this.stmt.all(...params);
     if (!this.fields && !this.customResultMapper) {
@@ -178,7 +190,7 @@ class NodeSQLitePreparedQuery<
   }
 
   get(placeholderValues?: Record<string, unknown>): T['get'] {
-    const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
+    const params = bindParams(fillPlaceholders(this.query.params, placeholderValues ?? {}));
     this.logger.logQuery(this.query.sql, params);
     const row = this.stmt.get(...params);
     if (!row) return undefined as T['get'];
@@ -193,7 +205,7 @@ class NodeSQLitePreparedQuery<
   }
 
   values(placeholderValues?: Record<string, unknown>): T['values'] {
-    const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
+    const params = bindParams(fillPlaceholders(this.query.params, placeholderValues ?? {}));
     this.logger.logQuery(this.query.sql, params);
     return this.stmt.all(...params).map((row) => Object.values(row)) as T['values'];
   }
