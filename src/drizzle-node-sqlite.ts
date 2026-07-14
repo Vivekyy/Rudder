@@ -25,10 +25,11 @@ interface NodeSQLiteSessionOptions {
   cache?: Cache;
 }
 
-interface DrizzleConfig<TSchema extends Record<string, unknown>> extends NodeSQLiteSessionOptions {
+interface DrizzleConfig<TSchema extends Record<string, unknown>> {
   schema?: TSchema;
   casing?: 'snake_case' | 'camelCase';
   logger?: boolean | Logger;
+  cache?: Cache;
 }
 
 type SQLiteParam = null | number | bigint | string | NodeJS.ArrayBufferView;
