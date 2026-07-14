@@ -2,6 +2,7 @@ import { runAgent, resolveAgent, type Agent } from './agent.ts';
 import {
   activeRules,
   applyCompilation,
+  claimTraceEvent,
   markTraceEvent,
   pendingTraceEvents,
   type MemoryRule,
@@ -131,6 +132,9 @@ ${JSON.stringify(existing)}`;
 }
 
 export function compileEvent(event: TraceEvent, agent: Agent): CompilationResult {
+  if (!claimTraceEvent(event.id, agent, COMPILER_VERSION)) {
+    return { signal: false, reason: 'trace event is already claimed or completed', candidates: [] };
+  }
   const active = activeRules(event.cwd ?? event.project);
   const result = parseCompilation(runAgent(agent, compilationInstruction(event, active)));
   if (!result.signal) {

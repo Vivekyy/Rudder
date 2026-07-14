@@ -40,6 +40,13 @@ export function dbPath(): string {
 
 let _db: DatabaseSync | null = null;
 
+function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some((row) => row.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
+  }
+}
+
 export function openDb(): DatabaseSync {
   if (_db) return _db;
   mkdirSync(rudderHome(), { recursive: true });
@@ -81,6 +88,7 @@ export function openDb(): DatabaseSync {
       compiler         TEXT,
       compiler_version INTEGER,
       error            TEXT,
+      lease_until      TEXT,
       attempts         INTEGER NOT NULL DEFAULT 0,
       ts               TEXT NOT NULL
     );
@@ -111,6 +119,7 @@ export function openDb(): DatabaseSync {
       PRIMARY KEY (rule_id, prompt_id)
     );
   `);
+  ensureColumn(db, 'trace_events', 'lease_until', 'TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS idx_trace_events_status ON trace_events(status);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_memory_rules_status ON memory_rules(status);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_memory_rules_project ON memory_rules(project);');

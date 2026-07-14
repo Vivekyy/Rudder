@@ -25,6 +25,7 @@ export interface TraceEvent extends PromptRow {
   transcript_path: string | null;
   task_text: string | null;
   behavior_text: string | null;
+  lease_until: string | null;
   attempts: number;
 }
 
@@ -54,15 +55,44 @@ export function queueTraceEvent(
 }
 
 export function pendingTraceEvents(): TraceEvent[] {
+  const now = new Date().toISOString();
   return openDb()
     .prepare(
-      `SELECT p.*, e.transcript_path, e.task_text, e.behavior_text, e.attempts
+      `SELECT p.*, e.transcript_path, e.task_text, e.behavior_text, e.lease_until, e.attempts
        FROM trace_events e
        JOIN prompts p ON p.id = e.prompt_id
-       WHERE e.status = 'pending' OR (e.status = 'error' AND e.attempts < 3)
+       WHERE e.status = 'pending'
+          OR (e.status = 'error' AND e.attempts < 3)
+          OR (e.status = 'compiling' AND e.attempts < 3
+              AND (e.lease_until IS NULL OR e.lease_until < ?))
        ORDER BY p.ts ASC`
     )
-    .all() as unknown as TraceEvent[];
+    .all(now) as unknown as TraceEvent[];
+}
+
+const TRACE_EVENT_LEASE_MS = 15 * 60 * 1_000;
+
+export function claimTraceEvent(
+  promptId: number,
+  compiler: string,
+  compilerVersion: number,
+  leaseMs = TRACE_EVENT_LEASE_MS
+): boolean {
+  const now = new Date().toISOString();
+  const leaseUntil = new Date(Date.now() + leaseMs).toISOString();
+  const result = openDb()
+    .prepare(
+      `UPDATE trace_events
+       SET status = 'compiling', compiler = ?, compiler_version = ?,
+           error = NULL, lease_until = ?
+       WHERE prompt_id = ?
+         AND (status = 'pending'
+              OR (status = 'error' AND attempts < 3)
+              OR (status = 'compiling' AND attempts < 3
+                  AND (lease_until IS NULL OR lease_until < ?)))`
+    )
+    .run(compiler, compilerVersion, leaseUntil, promptId, now) as { changes: number };
+  return result.changes > 0;
 }
 
 export function markTraceEvent(
@@ -76,9 +106,10 @@ export function markTraceEvent(
     .prepare(
       `UPDATE trace_events
        SET status = ?, compiler = ?, compiler_version = ?, error = ?,
+           lease_until = NULL,
            attempts = attempts + CASE WHEN ? = 'error' THEN 1 ELSE 0 END
        WHERE prompt_id = ?
-         AND (status = 'pending' OR (status = 'error' AND attempts < 3))`
+         AND (status = 'pending' OR status = 'compiling' OR (status = 'error' AND attempts < 3))`
     )
     .run(status, compiler, compilerVersion, error ?? null, status, promptId);
 }
@@ -204,11 +235,16 @@ function applyCandidate(
   return db.prepare('SELECT * FROM memory_rules WHERE id = ?').get(ruleId) as unknown as MemoryRule;
 }
 
-function retryableTraceEvent(db: ReturnType<typeof openDb>, promptId: number): boolean {
+function processableTraceEvent(db: ReturnType<typeof openDb>, promptId: number): boolean {
   const row = db
     .prepare('SELECT status, attempts FROM trace_events WHERE prompt_id = ?')
     .get(promptId) as { status: string; attempts: number } | undefined;
-  return !!row && (row.status === 'pending' || (row.status === 'error' && row.attempts < 3));
+  return (
+    !!row &&
+    (row.status === 'pending' ||
+      row.status === 'compiling' ||
+      (row.status === 'error' && row.attempts < 3))
+  );
 }
 
 function lastCandidatePerExistingTarget(
@@ -238,7 +274,7 @@ export function applyCompilation(
   const db = openDb();
   db.exec('BEGIN IMMEDIATE');
   try {
-    if (!retryableTraceEvent(db, event.id)) {
+    if (!processableTraceEvent(db, event.id)) {
       db.exec('COMMIT');
       return [];
     }
@@ -247,7 +283,8 @@ export function applyCompilation(
       .filter((rule): rule is MemoryRule => rule !== null);
     db.prepare(
       `UPDATE trace_events
-       SET status = 'compiled', compiler = ?, compiler_version = ?, error = NULL
+       SET status = 'compiled', compiler = ?, compiler_version = ?, error = NULL,
+           lease_until = NULL
        WHERE prompt_id = ?`
     ).run(compiler, compilerVersion, event.id);
     db.exec('COMMIT');

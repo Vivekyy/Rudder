@@ -456,9 +456,8 @@ test('compilation applies only the last candidate for a repeated existing rule t
 
 test('completed trace events are not reprocessed by stale workers', async () => {
   const { insertPrompt, openDb } = await import('../src/db.ts');
-  const { queueTraceEvent, pendingTraceEvents, markTraceEvent, applyCompilation } = await import(
-    '../src/rules.ts'
-  );
+  const { queueTraceEvent, pendingTraceEvents, claimTraceEvent, markTraceEvent, applyCompilation } =
+    await import('../src/rules.ts');
   const promptId = insertPrompt({
     source: 'claude',
     prompt: 'Remember not to reprocess compiled events',
@@ -468,6 +467,9 @@ test('completed trace events are not reprocessed by stale workers', async () => 
   queueTraceEvent(promptId, null, '', '');
   const event = pendingTraceEvents().find((row) => row.id === promptId)!;
   const db = openDb();
+  assert.equal(claimTraceEvent(promptId, 'claude', 1), true);
+  assert.equal(claimTraceEvent(promptId, 'codex', 1), false);
+  assert.ok(!pendingTraceEvents().some((row) => row.id === promptId));
   db.prepare(
     `UPDATE trace_events
      SET status = 'compiled', compiler = 'claude', compiler_version = 1, error = NULL
