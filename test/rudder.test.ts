@@ -467,23 +467,46 @@ test('completed trace events are not reprocessed by stale workers', async () => 
   queueTraceEvent(promptId, null, '', '');
   const event = pendingTraceEvents().find((row) => row.id === promptId)!;
   const db = openDb();
-  assert.equal(claimTraceEvent(promptId, 'claude', 1), true);
-  assert.equal(claimTraceEvent(promptId, 'codex', 1), false);
+  const firstToken = claimTraceEvent(promptId, 'claude', 1)!;
+  assert.equal(typeof firstToken, 'string');
+  assert.equal(claimTraceEvent(promptId, 'codex', 1), null);
   assert.ok(!pendingTraceEvents().some((row) => row.id === promptId));
-  db.prepare(
-    `UPDATE trace_events
-     SET status = 'compiled', compiler = 'claude', compiler_version = 1, error = NULL
-     WHERE prompt_id = ?`
-  ).run(promptId);
+  db.prepare('UPDATE trace_events SET lease_until = ? WHERE prompt_id = ?').run(
+    new Date(Date.now() - 1_000).toISOString(),
+    promptId
+  );
+  const secondToken = claimTraceEvent(promptId, 'codex', 1)!;
+  assert.equal(typeof secondToken, 'string');
+  assert.notEqual(secondToken, firstToken);
 
-  markTraceEvent(promptId, 'error', 'codex', 1, 'stale worker failure');
-  const trace = db
-    .prepare('SELECT status, attempts, error FROM trace_events WHERE prompt_id = ?')
-    .get(promptId) as { status: string; attempts: number; error: string | null };
-  assert.equal(trace.status, 'compiled');
-  assert.equal(trace.attempts, 0);
-  assert.equal(trace.error, null);
+  markTraceEvent(promptId, 'skipped', 'claude', 1, undefined, firstToken);
+  const leased = db
+    .prepare('SELECT status, claim_token FROM trace_events WHERE prompt_id = ?')
+    .get(promptId) as { status: string; claim_token: string | null };
+  assert.equal(leased.status, 'compiling');
+  assert.equal(leased.claim_token, secondToken);
 
+  assert.equal(
+    applyCompilation(
+      event,
+      [
+        {
+          action: 'NEW',
+          existingAtomicId: null,
+          kind: 'preference',
+          scope: 'project',
+          ruleText: 'Ignore stale trace event owners.',
+          appliesWhen: 'processing trace events',
+          doesNotApplyWhen: 'the same worker still owns the lease',
+        },
+      ],
+      new Map(),
+      'claude',
+      1,
+      firstToken
+    ).length,
+    0
+  );
   const rules = applyCompilation(
     event,
     [
@@ -499,13 +522,28 @@ test('completed trace events are not reprocessed by stale workers', async () => 
     ],
     new Map(),
     'codex',
-    1
+    1,
+    secondToken
   );
-  assert.equal(rules.length, 0);
+  assert.equal(rules.length, 1);
+  db.prepare(
+    `UPDATE trace_events
+     SET status = 'compiled', compiler = 'claude', compiler_version = 1, error = NULL
+     WHERE prompt_id = ?`
+  ).run(promptId);
+
+  markTraceEvent(promptId, 'error', 'codex', 1, 'stale worker failure', firstToken);
+  const trace = db
+    .prepare('SELECT status, attempts, error FROM trace_events WHERE prompt_id = ?')
+    .get(promptId) as { status: string; attempts: number; error: string | null };
+  assert.equal(trace.status, 'compiled');
+  assert.equal(trace.attempts, 0);
+  assert.equal(trace.error, null);
+
   const inserted = db
     .prepare('SELECT COUNT(*) AS n FROM memory_rules WHERE source_prompt_id = ?')
     .get(promptId) as { n: number };
-  assert.equal(inserted.n, 0);
+  assert.equal(inserted.n, 1);
 });
 
 test('codex native UserPromptSubmit hook records stdin payload', async () => {

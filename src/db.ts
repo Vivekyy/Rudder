@@ -89,6 +89,7 @@ export function openDb(): DatabaseSync {
       compiler_version INTEGER,
       error            TEXT,
       lease_until      TEXT,
+      claim_token      TEXT,
       attempts         INTEGER NOT NULL DEFAULT 0,
       ts               TEXT NOT NULL
     );
@@ -120,6 +121,7 @@ export function openDb(): DatabaseSync {
     );
   `);
   ensureColumn(db, 'trace_events', 'lease_until', 'TEXT');
+  ensureColumn(db, 'trace_events', 'claim_token', 'TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS idx_trace_events_status ON trace_events(status);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_memory_rules_status ON memory_rules(status);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_memory_rules_project ON memory_rules(project);');

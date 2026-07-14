@@ -132,28 +132,34 @@ ${JSON.stringify(existing)}`;
 }
 
 export function compileEvent(event: TraceEvent, agent: Agent): CompilationResult {
-  if (!claimTraceEvent(event.id, agent, COMPILER_VERSION)) {
+  const claimToken = claimTraceEvent(event.id, agent, COMPILER_VERSION);
+  if (!claimToken) {
     return { signal: false, reason: 'trace event is already claimed or completed', candidates: [] };
   }
-  const active = activeRules(event.cwd ?? event.project);
-  const result = parseCompilation(runAgent(agent, compilationInstruction(event, active)));
-  if (!result.signal) {
-    markTraceEvent(event.id, 'skipped', agent, COMPILER_VERSION);
-    return result;
-  }
-  const expectedVersions = new Map(active.map((rule) => [rule.atomic_id, rule.version]));
-  for (const candidate of result.candidates) {
-    if (
-      candidate.existingAtomicId &&
-      !expectedVersions.has(candidate.existingAtomicId)
-    ) {
-      throw new Error(
-        `compiler referenced rule '${candidate.existingAtomicId}' outside the active project scope`
-      );
+  try {
+    const active = activeRules(event.cwd ?? event.project);
+    const result = parseCompilation(runAgent(agent, compilationInstruction(event, active)));
+    if (!result.signal) {
+      markTraceEvent(event.id, 'skipped', agent, COMPILER_VERSION, undefined, claimToken);
+      return result;
     }
+    const expectedVersions = new Map(active.map((rule) => [rule.atomic_id, rule.version]));
+    for (const candidate of result.candidates) {
+      if (
+        candidate.existingAtomicId &&
+        !expectedVersions.has(candidate.existingAtomicId)
+      ) {
+        throw new Error(
+          `compiler referenced rule '${candidate.existingAtomicId}' outside the active project scope`
+        );
+      }
+    }
+    applyCompilation(event, result.candidates, expectedVersions, agent, COMPILER_VERSION, claimToken);
+    return result;
+  } catch (err) {
+    markTraceEvent(event.id, 'error', agent, COMPILER_VERSION, (err as Error).message, claimToken);
+    throw err;
   }
-  applyCompilation(event, result.candidates, expectedVersions, agent, COMPILER_VERSION);
-  return result;
 }
 
 /** Compile queued prompt evidence out-of-band. Returns the number still pending. */
@@ -173,7 +179,6 @@ export function ensureCompiled(preferred?: Agent): number {
       compileEvent(event, agent);
       compiled++;
     } catch (err) {
-      markTraceEvent(event.id, 'error', agent, COMPILER_VERSION, (err as Error).message);
       process.stderr.write(`rudder: rule compilation failed for prompt ${event.id}: ${(err as Error).message}\n`);
     }
   }

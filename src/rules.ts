@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { openDb, type PromptRow } from './db.ts';
 
 export type RuleKind = 'preference' | 'pitfall' | 'friction';
@@ -26,6 +27,7 @@ export interface TraceEvent extends PromptRow {
   task_text: string | null;
   behavior_text: string | null;
   lease_until: string | null;
+  claim_token: string | null;
   attempts: number;
 }
 
@@ -58,7 +60,8 @@ export function pendingTraceEvents(): TraceEvent[] {
   const now = new Date().toISOString();
   return openDb()
     .prepare(
-      `SELECT p.*, e.transcript_path, e.task_text, e.behavior_text, e.lease_until, e.attempts
+      `SELECT p.*, e.transcript_path, e.task_text, e.behavior_text,
+              e.lease_until, e.claim_token, e.attempts
        FROM trace_events e
        JOIN prompts p ON p.id = e.prompt_id
        WHERE e.status = 'pending'
@@ -77,22 +80,23 @@ export function claimTraceEvent(
   compiler: string,
   compilerVersion: number,
   leaseMs = TRACE_EVENT_LEASE_MS
-): boolean {
+): string | null {
   const now = new Date().toISOString();
   const leaseUntil = new Date(Date.now() + leaseMs).toISOString();
+  const claimToken = randomUUID();
   const result = openDb()
     .prepare(
       `UPDATE trace_events
        SET status = 'compiling', compiler = ?, compiler_version = ?,
-           error = NULL, lease_until = ?
+           error = NULL, lease_until = ?, claim_token = ?
        WHERE prompt_id = ?
          AND (status = 'pending'
               OR (status = 'error' AND attempts < 3)
               OR (status = 'compiling' AND attempts < 3
                   AND (lease_until IS NULL OR lease_until < ?)))`
     )
-    .run(compiler, compilerVersion, leaseUntil, promptId, now) as { changes: number };
-  return result.changes > 0;
+    .run(compiler, compilerVersion, leaseUntil, claimToken, promptId, now) as { changes: number };
+  return result.changes > 0 ? claimToken : null;
 }
 
 export function markTraceEvent(
@@ -100,18 +104,21 @@ export function markTraceEvent(
   status: 'compiled' | 'skipped' | 'error',
   compiler: string,
   compilerVersion: number,
-  error?: string
+  error?: string,
+  claimToken?: string
 ): void {
+  const token = claimToken ?? null;
   openDb()
     .prepare(
       `UPDATE trace_events
        SET status = ?, compiler = ?, compiler_version = ?, error = ?,
-           lease_until = NULL,
+           lease_until = NULL, claim_token = NULL,
            attempts = attempts + CASE WHEN ? = 'error' THEN 1 ELSE 0 END
        WHERE prompt_id = ?
-         AND (status = 'pending' OR status = 'compiling' OR (status = 'error' AND attempts < 3))`
+         AND ((status = 'compiling' AND claim_token = ?)
+              OR (? IS NULL AND (status = 'pending' OR (status = 'error' AND attempts < 3))))`
     )
-    .run(status, compiler, compilerVersion, error ?? null, status, promptId);
+    .run(status, compiler, compilerVersion, error ?? null, status, promptId, token, token);
 }
 
 export function activeRules(projectKey?: string | null): MemoryRule[] {
@@ -235,15 +242,18 @@ function applyCandidate(
   return db.prepare('SELECT * FROM memory_rules WHERE id = ?').get(ruleId) as unknown as MemoryRule;
 }
 
-function processableTraceEvent(db: ReturnType<typeof openDb>, promptId: number): boolean {
+function processableTraceEvent(
+  db: ReturnType<typeof openDb>,
+  promptId: number,
+  claimToken?: string
+): boolean {
   const row = db
-    .prepare('SELECT status, attempts FROM trace_events WHERE prompt_id = ?')
-    .get(promptId) as { status: string; attempts: number } | undefined;
+    .prepare('SELECT status, attempts, claim_token FROM trace_events WHERE prompt_id = ?')
+    .get(promptId) as { status: string; attempts: number; claim_token: string | null } | undefined;
+  if (!row) return false;
+  if (row.status === 'compiling') return !!claimToken && row.claim_token === claimToken;
   return (
-    !!row &&
-    (row.status === 'pending' ||
-      row.status === 'compiling' ||
-      (row.status === 'error' && row.attempts < 3))
+    !claimToken && (row.status === 'pending' || (row.status === 'error' && row.attempts < 3))
   );
 }
 
@@ -269,12 +279,13 @@ export function applyCompilation(
   candidates: RuleCandidate[],
   expectedVersions: ReadonlyMap<string, number>,
   compiler: string,
-  compilerVersion: number
+  compilerVersion: number,
+  claimToken?: string
 ): MemoryRule[] {
   const db = openDb();
   db.exec('BEGIN IMMEDIATE');
   try {
-    if (!processableTraceEvent(db, event.id)) {
+    if (!processableTraceEvent(db, event.id, claimToken)) {
       db.exec('COMMIT');
       return [];
     }
@@ -284,7 +295,7 @@ export function applyCompilation(
     db.prepare(
       `UPDATE trace_events
        SET status = 'compiled', compiler = ?, compiler_version = ?, error = NULL,
-           lease_until = NULL
+           lease_until = NULL, claim_token = NULL
        WHERE prompt_id = ?`
     ).run(compiler, compilerVersion, event.id);
     db.exec('COMMIT');
