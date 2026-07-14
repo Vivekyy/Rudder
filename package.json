@@ -43,6 +43,7 @@
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "posthog-node": "^5.41.0",
     "shell-quote": "^1.8.1"
   },

@@ -1,4 +1,6 @@
-import { openDb, type PromptRow } from './db.ts';
+import { and, asc, eq, isNull } from 'drizzle-orm';
+import { rudderDb, type PromptRow } from './db.ts';
+import { promptTags, prompts } from './schema.ts';
 import {
   CATEGORIES,
   normCategory,
@@ -40,16 +42,27 @@ export interface DayStats {
 
 /** Prompts for `day` that have no tag at the current tagger version yet. */
 export function untaggedPromptsForDay(day: string): PromptRow[] {
-  const db = openDb();
-  return db
-    .prepare(
-      `SELECT p.* FROM prompts p
-       LEFT JOIN prompt_tags t
-         ON t.prompt_id = p.id AND t.tagger_version = ?
-       WHERE p.day = ? AND t.prompt_id IS NULL
-       ORDER BY p.ts ASC`
+  return rudderDb()
+    .select({
+      id: prompts.id,
+      ts: prompts.ts,
+      day: prompts.day,
+      source: prompts.source,
+      session_id: prompts.session_id,
+      cwd: prompts.cwd,
+      project: prompts.project,
+      prompt: prompts.prompt,
+      model: prompts.model,
+      raw: prompts.raw,
+    })
+    .from(prompts)
+    .leftJoin(
+      promptTags,
+      and(eq(promptTags.prompt_id, prompts.id), eq(promptTags.tagger_version, TAGGER_VERSION))
     )
-    .all(TAGGER_VERSION, day) as unknown as PromptRow[];
+    .where(and(eq(prompts.day, day), isNull(promptTags.prompt_id)))
+    .orderBy(asc(prompts.ts))
+    .all() as PromptRow[];
 }
 
 /** Insert or replace the tag for a prompt. */
@@ -60,17 +73,22 @@ export function upsertTag(
   tagger: string,
   taggerVersion: number = TAGGER_VERSION
 ): void {
-  const db = openDb();
-  db.prepare(
-    `INSERT INTO prompt_tags (prompt_id, category, reaction, tagger, tagger_version, ts)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(prompt_id) DO UPDATE SET
-       category = excluded.category,
-       reaction = excluded.reaction,
-       tagger = excluded.tagger,
-       tagger_version = excluded.tagger_version,
-       ts = excluded.ts`
-  ).run(promptId, category, reaction, tagger, taggerVersion, new Date().toISOString());
+  const ts = new Date().toISOString();
+  rudderDb()
+    .insert(promptTags)
+    .values({
+      prompt_id: promptId,
+      category,
+      reaction,
+      tagger,
+      tagger_version: taggerVersion,
+      ts,
+    })
+    .onConflictDoUpdate({
+      target: promptTags.prompt_id,
+      set: { category, reaction, tagger, tagger_version: taggerVersion, ts },
+    })
+    .run();
 }
 
 function round(n: number): number {
@@ -83,16 +101,19 @@ function round(n: number): number {
  * percentages rather than skewing a work category.
  */
 export function statsForDay(day: string): DayStats {
-  const db = openDb();
-  const rows = db
-    .prepare(
-      `SELECT p.id AS id, t.category AS category, t.reaction AS reaction
-       FROM prompts p
-       LEFT JOIN prompt_tags t
-         ON t.prompt_id = p.id AND t.tagger_version = ?
-       WHERE p.day = ?`
+  const rows = rudderDb()
+    .select({
+      id: prompts.id,
+      category: promptTags.category,
+      reaction: promptTags.reaction,
+    })
+    .from(prompts)
+    .leftJoin(
+      promptTags,
+      and(eq(promptTags.prompt_id, prompts.id), eq(promptTags.tagger_version, TAGGER_VERSION))
     )
-    .all(TAGGER_VERSION, day) as unknown as Array<{
+    .where(eq(prompts.day, day))
+    .all() as Array<{
     id: number;
     category: string | null;
     reaction: string | null;
@@ -137,13 +158,11 @@ export function statsForDay(day: string): DayStats {
 
 /** Map each tagged prompt on `day` to its stored category (at the current version). */
 export function categoryMapForDay(day: string): Map<number, Category> {
-  const db = openDb();
-  const rows = db
-    .prepare(
-      `SELECT t.prompt_id AS id, t.category AS category
-       FROM prompt_tags t JOIN prompts p ON p.id = t.prompt_id
-       WHERE p.day = ? AND t.tagger_version = ?`
-    )
-    .all(day, TAGGER_VERSION) as unknown as Array<{ id: number; category: string }>;
+  const rows = rudderDb()
+    .select({ id: promptTags.prompt_id, category: promptTags.category })
+    .from(promptTags)
+    .innerJoin(prompts, eq(prompts.id, promptTags.prompt_id))
+    .where(and(eq(prompts.day, day), eq(promptTags.tagger_version, TAGGER_VERSION)))
+    .all() as Array<{ id: number; category: string }>;
   return new Map(rows.map((r) => [r.id, normCategory(r.category)]));
 }

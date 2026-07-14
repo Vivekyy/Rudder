@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { openDb, type PromptRow } from './db.ts';
+import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { rudderDb, type PromptRow } from './db.ts';
+import { memoryRules, prompts, ruleEvidence, traceEvents } from './schema.ts';
 
 export type RuleKind = 'preference' | 'pitfall' | 'friction';
 export type RuleScope = 'global' | 'project';
@@ -47,30 +49,56 @@ export function queueTraceEvent(
   taskText: string,
   behaviorText: string
 ): void {
-  openDb()
-    .prepare(
-      `INSERT OR IGNORE INTO trace_events
-       (prompt_id, transcript_path, task_text, behavior_text, status, ts)
-       VALUES (?, ?, ?, ?, 'pending', ?)`
-    )
-    .run(promptId, transcriptPath, taskText || null, behaviorText || null, new Date().toISOString());
+  rudderDb()
+    .insert(traceEvents)
+    .values({
+      prompt_id: promptId,
+      transcript_path: transcriptPath,
+      task_text: taskText || null,
+      behavior_text: behaviorText || null,
+      status: 'pending',
+      ts: new Date().toISOString(),
+    })
+    .onConflictDoNothing()
+    .run();
 }
 
 export function pendingTraceEvents(): TraceEvent[] {
   const now = new Date().toISOString();
-  return openDb()
-    .prepare(
-      `SELECT p.*, e.transcript_path, e.task_text, e.behavior_text,
-              e.lease_until, e.claim_token, e.attempts
-       FROM trace_events e
-       JOIN prompts p ON p.id = e.prompt_id
-       WHERE e.status = 'pending'
-          OR (e.status = 'error' AND e.attempts < 3)
-          OR (e.status = 'compiling' AND e.attempts < 3
-              AND (e.lease_until IS NULL OR e.lease_until < ?))
-       ORDER BY p.ts ASC`
+  return rudderDb()
+    .select({
+      id: prompts.id,
+      ts: prompts.ts,
+      day: prompts.day,
+      source: prompts.source,
+      session_id: prompts.session_id,
+      cwd: prompts.cwd,
+      project: prompts.project,
+      prompt: prompts.prompt,
+      model: prompts.model,
+      raw: prompts.raw,
+      transcript_path: traceEvents.transcript_path,
+      task_text: traceEvents.task_text,
+      behavior_text: traceEvents.behavior_text,
+      lease_until: traceEvents.lease_until,
+      claim_token: traceEvents.claim_token,
+      attempts: traceEvents.attempts,
+    })
+    .from(traceEvents)
+    .innerJoin(prompts, eq(prompts.id, traceEvents.prompt_id))
+    .where(
+      or(
+        eq(traceEvents.status, 'pending'),
+        and(eq(traceEvents.status, 'error'), lt(traceEvents.attempts, 3)),
+        and(
+          eq(traceEvents.status, 'compiling'),
+          lt(traceEvents.attempts, 3),
+          or(isNull(traceEvents.lease_until), lt(traceEvents.lease_until, now))
+        )
+      )
     )
-    .all(now) as unknown as TraceEvent[];
+    .orderBy(asc(prompts.ts))
+    .all() as TraceEvent[];
 }
 
 const TRACE_EVENT_LEASE_MS = 15 * 60 * 1_000;
@@ -84,18 +112,31 @@ export function claimTraceEvent(
   const now = new Date().toISOString();
   const leaseUntil = new Date(Date.now() + leaseMs).toISOString();
   const claimToken = randomUUID();
-  const result = openDb()
-    .prepare(
-      `UPDATE trace_events
-       SET status = 'compiling', compiler = ?, compiler_version = ?,
-           error = NULL, lease_until = ?, claim_token = ?
-       WHERE prompt_id = ?
-         AND (status = 'pending'
-              OR (status = 'error' AND attempts < 3)
-              OR (status = 'compiling' AND attempts < 3
-                  AND (lease_until IS NULL OR lease_until < ?)))`
+  const result = rudderDb()
+    .update(traceEvents)
+    .set({
+      status: 'compiling',
+      compiler,
+      compiler_version: compilerVersion,
+      error: null,
+      lease_until: leaseUntil,
+      claim_token: claimToken,
+    })
+    .where(
+      and(
+        eq(traceEvents.prompt_id, promptId),
+        or(
+          eq(traceEvents.status, 'pending'),
+          and(eq(traceEvents.status, 'error'), lt(traceEvents.attempts, 3)),
+          and(
+            eq(traceEvents.status, 'compiling'),
+            lt(traceEvents.attempts, 3),
+            or(isNull(traceEvents.lease_until), lt(traceEvents.lease_until, now))
+          )
+        )
+      )
     )
-    .run(compiler, compilerVersion, leaseUntil, claimToken, promptId, now) as { changes: number };
+    .run() as { changes: number | bigint };
   return result.changes > 0 ? claimToken : null;
 }
 
@@ -108,35 +149,52 @@ export function markTraceEvent(
   claimToken?: string
 ): void {
   const token = claimToken ?? null;
-  openDb()
-    .prepare(
-      `UPDATE trace_events
-       SET status = ?, compiler = ?, compiler_version = ?, error = ?,
-           lease_until = NULL, claim_token = NULL,
-           attempts = attempts + CASE WHEN ? = 'error' THEN 1 ELSE 0 END
-       WHERE prompt_id = ?
-         AND ((status = 'compiling' AND claim_token = ?)
-              OR (? IS NULL AND (status = 'pending' OR (status = 'error' AND attempts < 3))))`
-    )
-    .run(status, compiler, compilerVersion, error ?? null, status, promptId, token, token);
+  const ownerClause =
+    token === null
+      ? or(eq(traceEvents.status, 'pending'), and(eq(traceEvents.status, 'error'), lt(traceEvents.attempts, 3)))
+      : and(eq(traceEvents.status, 'compiling'), eq(traceEvents.claim_token, token));
+  rudderDb()
+    .update(traceEvents)
+    .set({
+      status,
+      compiler,
+      compiler_version: compilerVersion,
+      error: error ?? null,
+      lease_until: null,
+      claim_token: null,
+      attempts: sql<number>`${traceEvents.attempts} + CASE WHEN ${status} = 'error' THEN 1 ELSE 0 END`,
+    })
+    .where(and(eq(traceEvents.prompt_id, promptId), ownerClause))
+    .run();
 }
 
 export function activeRules(projectKey?: string | null): MemoryRule[] {
-  return openDb()
-    .prepare(
-      `SELECT * FROM memory_rules
-       WHERE status = 'active'
-         AND (scope = 'global' OR (scope = 'project' AND project = ?))
-       ORDER BY CASE kind WHEN 'pitfall' THEN 0 WHEN 'preference' THEN 1 ELSE 2 END,
-                atomic_id ASC`
+  return rudderDb()
+    .select()
+    .from(memoryRules)
+    .where(
+      and(
+        eq(memoryRules.status, 'active'),
+        or(
+          eq(memoryRules.scope, 'global'),
+          and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey ?? null))
+        )
+      )
     )
-    .all(projectKey ?? null) as unknown as MemoryRule[];
+    .orderBy(
+      sql`CASE ${memoryRules.kind} WHEN 'pitfall' THEN 0 WHEN 'preference' THEN 1 ELSE 2 END`,
+      asc(memoryRules.atomic_id)
+    )
+    .all() as MemoryRule[];
 }
 
 export function allActiveRules(): MemoryRule[] {
-  return openDb()
-    .prepare(`SELECT * FROM memory_rules WHERE status = 'active' ORDER BY atomic_id ASC`)
-    .all() as unknown as MemoryRule[];
+  return rudderDb()
+    .select()
+    .from(memoryRules)
+    .where(eq(memoryRules.status, 'active'))
+    .orderBy(asc(memoryRules.atomic_id))
+    .all() as MemoryRule[];
 }
 
 export function renderRuleContext(projectKey?: string | null, limit = 12): string {
@@ -160,22 +218,32 @@ export function renderRuleContext(projectKey?: string | null, limit = 12): strin
 function activeRuleByAtomicId(
   atomicId: string,
   projectKey: string | null,
-  db = openDb()
+  db: RuleDb = rudderDb()
 ): MemoryRule | null {
   return (
     (db
-      .prepare(
-        `SELECT * FROM memory_rules
-         WHERE atomic_id = ? AND status = 'active'
-           AND (scope = 'global' OR (scope = 'project' AND project = ?))
-         ORDER BY version DESC LIMIT 1`
+      .select()
+      .from(memoryRules)
+      .where(
+        and(
+          eq(memoryRules.atomic_id, atomicId),
+          eq(memoryRules.status, 'active'),
+          or(
+            eq(memoryRules.scope, 'global'),
+            and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey))
+          )
+        )
       )
-      .get(atomicId, projectKey) as unknown as MemoryRule | undefined) ?? null
+      .orderBy(sql`${memoryRules.version} DESC`)
+      .limit(1)
+      .get() as MemoryRule | undefined) ?? null
   );
 }
 
+type RuleDb = ReturnType<typeof rudderDb> | Parameters<Parameters<ReturnType<typeof rudderDb>['transaction']>[0]>[0];
+
 function applyCandidate(
-  db: ReturnType<typeof openDb>,
+  db: RuleDb,
   event: TraceEvent,
   candidate: RuleCandidate,
   index: number,
@@ -197,16 +265,20 @@ function applyCandidate(
   }
   const now = new Date().toISOString();
   if (candidate.action === 'NOOP') {
-    db.prepare(
-      `INSERT OR IGNORE INTO rule_evidence (rule_id, prompt_id, action, ts)
-       VALUES (?, ?, 'NOOP', ?)`
-    ).run(existing!.id, event.id, now);
+    db
+      .insert(ruleEvidence)
+      .values({ rule_id: existing!.id, prompt_id: event.id, action: 'NOOP', ts: now })
+      .onConflictDoNothing()
+      .run();
     return existing;
   }
 
   if (existing) {
-    db.prepare(`UPDATE memory_rules SET status = 'superseded', updated_at = ? WHERE id = ?`)
-      .run(now, existing.id);
+    db
+      .update(memoryRules)
+      .set({ status: 'superseded', updated_at: now })
+      .where(eq(memoryRules.id, existing.id))
+      .run();
   }
 
   const atomicId =
@@ -214,42 +286,44 @@ function applyCandidate(
   const version = candidate.action === 'UPDATE' ? existing!.version + 1 : 1;
   const project = candidate.scope === 'project' ? projectKey : null;
   const inserted = db
-    .prepare(
-      `INSERT INTO memory_rules
-       (atomic_id, version, status, kind, scope, project, rule_text,
-        applies_when, does_not_apply_when, source_prompt_id,
-        supersedes_rule_id, created_at, updated_at)
-       VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      atomicId,
+    .insert(memoryRules)
+    .values({
+      atomic_id: atomicId,
       version,
-      candidate.kind,
-      candidate.scope,
+      status: 'active',
+      kind: candidate.kind,
+      scope: candidate.scope,
       project,
-      candidate.ruleText,
-      candidate.appliesWhen,
-      candidate.doesNotApplyWhen,
-      event.id,
-      existing?.id ?? null,
-      now,
-      now
-    );
+      rule_text: candidate.ruleText,
+      applies_when: candidate.appliesWhen,
+      does_not_apply_when: candidate.doesNotApplyWhen,
+      source_prompt_id: event.id,
+      supersedes_rule_id: existing?.id ?? null,
+      created_at: now,
+      updated_at: now,
+    })
+    .run();
   const ruleId = Number(inserted.lastInsertRowid);
-  db.prepare(
-    `INSERT INTO rule_evidence (rule_id, prompt_id, action, ts) VALUES (?, ?, ?, ?)`
-  ).run(ruleId, event.id, candidate.action, now);
-  return db.prepare('SELECT * FROM memory_rules WHERE id = ?').get(ruleId) as unknown as MemoryRule;
+  db.insert(ruleEvidence)
+    .values({ rule_id: ruleId, prompt_id: event.id, action: candidate.action, ts: now })
+    .run();
+  return db.select().from(memoryRules).where(eq(memoryRules.id, ruleId)).get() as MemoryRule;
 }
 
 function processableTraceEvent(
-  db: ReturnType<typeof openDb>,
+  db: RuleDb,
   promptId: number,
   claimToken?: string
 ): boolean {
   const row = db
-    .prepare('SELECT status, attempts, claim_token FROM trace_events WHERE prompt_id = ?')
-    .get(promptId) as { status: string; attempts: number; claim_token: string | null } | undefined;
+    .select({
+      status: traceEvents.status,
+      attempts: traceEvents.attempts,
+      claim_token: traceEvents.claim_token,
+    })
+    .from(traceEvents)
+    .where(eq(traceEvents.prompt_id, promptId))
+    .get() as { status: string; attempts: number; claim_token: string | null } | undefined;
   if (!row) return false;
   if (row.status === 'compiling') return !!claimToken && row.claim_token === claimToken;
   return (
@@ -282,28 +356,27 @@ export function applyCompilation(
   compilerVersion: number,
   claimToken?: string
 ): MemoryRule[] {
-  const db = openDb();
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  return rudderDb().transaction((db) => {
     if (!processableTraceEvent(db, event.id, claimToken)) {
-      db.exec('COMMIT');
       return [];
     }
     const rules = lastCandidatePerExistingTarget(candidates)
       .map(({ candidate, index }) => applyCandidate(db, event, candidate, index, expectedVersions))
       .filter((rule): rule is MemoryRule => rule !== null);
-    db.prepare(
-      `UPDATE trace_events
-       SET status = 'compiled', compiler = ?, compiler_version = ?, error = NULL,
-           lease_until = NULL, claim_token = NULL
-       WHERE prompt_id = ?`
-    ).run(compiler, compilerVersion, event.id);
-    db.exec('COMMIT');
+    db
+      .update(traceEvents)
+      .set({
+        status: 'compiled',
+        compiler,
+        compiler_version: compilerVersion,
+        error: null,
+        lease_until: null,
+        claim_token: null,
+      })
+      .where(eq(traceEvents.prompt_id, event.id))
+      .run();
     return rules;
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+  }, { behavior: 'immediate' });
 }
 
 /** Apply one candidate transactionally (used by direct callers and tests). */
@@ -312,14 +385,8 @@ export function applyRuleCandidate(
   candidate: RuleCandidate,
   index: number
 ): MemoryRule | null {
-  const db = openDb();
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  return rudderDb().transaction((db) => {
     const rule = applyCandidate(db, event, candidate, index);
-    db.exec('COMMIT');
     return rule;
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+  }, { behavior: 'immediate' });
 }

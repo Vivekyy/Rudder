@@ -2,6 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { asc, eq } from 'drizzle-orm';
+import { drizzleNodeSqlite } from './drizzle-node-sqlite.ts';
+import { prompts, schema } from './schema.ts';
 
 export type Source = 'claude' | 'codex';
 
@@ -39,6 +42,7 @@ export function dbPath(): string {
 }
 
 let _db: DatabaseSync | null = null;
+let _drizzle: ReturnType<typeof drizzleNodeSqlite<typeof schema>> | null = null;
 
 function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string): void {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
@@ -129,6 +133,13 @@ export function openDb(): DatabaseSync {
   return db;
 }
 
+export function rudderDb(): ReturnType<typeof drizzleNodeSqlite<typeof schema>> {
+  if (!_drizzle) {
+    _drizzle = drizzleNodeSqlite(openDb(), { schema });
+  }
+  return _drizzle;
+}
+
 /** TCP port the `rudder start` dashboard daemon listens on (override with RUDDER_PORT). */
 export function rudderPort(): number {
   const p = Number(process.env.RUDDER_PORT);
@@ -146,30 +157,29 @@ export function insertPrompt(p: NewPrompt): number | null {
   const text = (p.prompt || '').trim();
   // Silently skip blank prompts so hooks never store noise.
   if (!text) return null;
-  const db = openDb();
   const when = p.ts ? new Date(p.ts) : new Date();
-  const row = db
-    .prepare(
-      `INSERT INTO prompts (ts, day, source, session_id, cwd, project, prompt, model, raw)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      when.toISOString(),
-      localDay(when),
-      p.source,
-      p.session_id ?? null,
-      p.cwd ?? null,
-      p.project ?? null,
-      text,
-      p.model ?? null,
-      p.raw ?? null
-    );
+  const row = rudderDb()
+    .insert(prompts)
+    .values({
+      ts: when.toISOString(),
+      day: localDay(when),
+      source: p.source,
+      session_id: p.session_id ?? null,
+      cwd: p.cwd ?? null,
+      project: p.project ?? null,
+      prompt: text,
+      model: p.model ?? null,
+      raw: p.raw ?? null,
+    })
+    .run();
   return Number(row.lastInsertRowid);
 }
 
 export function promptsForDay(day: string): PromptRow[] {
-  const db = openDb();
-  return db
-    .prepare('SELECT * FROM prompts WHERE day = ? ORDER BY ts ASC')
-    .all(day) as unknown as PromptRow[];
+  return rudderDb()
+    .select()
+    .from(prompts)
+    .where(eq(prompts.day, day))
+    .orderBy(asc(prompts.ts))
+    .all() as PromptRow[];
 }
