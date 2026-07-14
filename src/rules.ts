@@ -77,7 +77,8 @@ export function markTraceEvent(
       `UPDATE trace_events
        SET status = ?, compiler = ?, compiler_version = ?, error = ?,
            attempts = attempts + CASE WHEN ? = 'error' THEN 1 ELSE 0 END
-       WHERE prompt_id = ?`
+       WHERE prompt_id = ?
+         AND (status = 'pending' OR (status = 'error' AND attempts < 3))`
     )
     .run(status, compiler, compilerVersion, error ?? null, status, promptId);
 }
@@ -203,6 +204,29 @@ function applyCandidate(
   return db.prepare('SELECT * FROM memory_rules WHERE id = ?').get(ruleId) as unknown as MemoryRule;
 }
 
+function retryableTraceEvent(db: ReturnType<typeof openDb>, promptId: number): boolean {
+  const row = db
+    .prepare('SELECT status, attempts FROM trace_events WHERE prompt_id = ?')
+    .get(promptId) as { status: string; attempts: number } | undefined;
+  return !!row && (row.status === 'pending' || (row.status === 'error' && row.attempts < 3));
+}
+
+function lastCandidatePerExistingTarget(
+  candidates: RuleCandidate[]
+): { candidate: RuleCandidate; index: number }[] {
+  const seen = new Set<string>();
+  const kept: { candidate: RuleCandidate; index: number }[] = [];
+  for (let index = candidates.length - 1; index >= 0; index--) {
+    const candidate = candidates[index];
+    if (candidate.existingAtomicId) {
+      if (seen.has(candidate.existingAtomicId)) continue;
+      seen.add(candidate.existingAtomicId);
+    }
+    kept.push({ candidate, index });
+  }
+  return kept.reverse();
+}
+
 /** Apply every candidate and mark its trace event in one SQLite transaction. */
 export function applyCompilation(
   event: TraceEvent,
@@ -214,8 +238,12 @@ export function applyCompilation(
   const db = openDb();
   db.exec('BEGIN IMMEDIATE');
   try {
-    const rules = candidates
-      .map((candidate, index) => applyCandidate(db, event, candidate, index, expectedVersions))
+    if (!retryableTraceEvent(db, event.id)) {
+      db.exec('COMMIT');
+      return [];
+    }
+    const rules = lastCandidatePerExistingTarget(candidates)
+      .map(({ candidate, index }) => applyCandidate(db, event, candidate, index, expectedVersions))
       .filter((rule): rule is MemoryRule => rule !== null);
     db.prepare(
       `UPDATE trace_events

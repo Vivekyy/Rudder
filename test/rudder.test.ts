@@ -384,6 +384,128 @@ test('compilation rolls back all candidates when one lifecycle action fails', as
   assert.equal(row.n, 0, 'the first candidate must roll back with the failed second candidate');
 });
 
+test('compilation applies only the last candidate for a repeated existing rule target', async () => {
+  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { queueTraceEvent, pendingTraceEvents, applyRuleCandidate, applyCompilation, activeRules } =
+    await import('../src/rules.ts');
+  const firstPromptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Prefer npm scripts in this repository',
+    cwd: '/repos/repeated-target',
+    project: 'repeated-target',
+  })!;
+  queueTraceEvent(firstPromptId, null, '', '');
+  const firstEvent = pendingTraceEvents().find((row) => row.id === firstPromptId)!;
+  const first = applyRuleCandidate(
+    firstEvent,
+    {
+      action: 'NEW',
+      existingAtomicId: null,
+      kind: 'preference',
+      scope: 'project',
+      ruleText: 'Use npm scripts.',
+      appliesWhen: 'running package scripts',
+      doesNotApplyWhen: 'another tool is explicitly requested',
+    },
+    0
+  )!;
+  const secondPromptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Actually prefer pnpm scripts in this repository',
+    cwd: '/repos/repeated-target',
+    project: 'repeated-target',
+  })!;
+  queueTraceEvent(secondPromptId, null, '', '');
+  const secondEvent = pendingTraceEvents().find((row) => row.id === secondPromptId)!;
+
+  const rules = applyCompilation(
+    secondEvent,
+    [
+      {
+        action: 'SUPERSEDE',
+        existingAtomicId: first.atomic_id,
+        kind: 'preference',
+        scope: 'project',
+        ruleText: 'Use yarn scripts.',
+        appliesWhen: 'running package scripts',
+        doesNotApplyWhen: 'another tool is explicitly requested',
+      },
+      {
+        action: 'SUPERSEDE',
+        existingAtomicId: first.atomic_id,
+        kind: 'preference',
+        scope: 'project',
+        ruleText: 'Use pnpm scripts.',
+        appliesWhen: 'running package scripts',
+        doesNotApplyWhen: 'another tool is explicitly requested',
+      },
+    ],
+    new Map([[first.atomic_id, first.version]]),
+    'claude',
+    1
+  );
+
+  assert.equal(rules.length, 1);
+  assert.equal(rules[0].rule_text, 'Use pnpm scripts.');
+  assert.ok(activeRules('/repos/repeated-target').some((rule) => rule.rule_text === 'Use pnpm scripts.'));
+  const superseded = openDb()
+    .prepare('SELECT status FROM memory_rules WHERE id = ?')
+    .get(first.id) as { status: string };
+  assert.equal(superseded.status, 'superseded');
+});
+
+test('completed trace events are not reprocessed by stale workers', async () => {
+  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { queueTraceEvent, pendingTraceEvents, markTraceEvent, applyCompilation } = await import(
+    '../src/rules.ts'
+  );
+  const promptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Remember not to reprocess compiled events',
+    cwd: '/repos/completed-events',
+    project: 'completed-events',
+  })!;
+  queueTraceEvent(promptId, null, '', '');
+  const event = pendingTraceEvents().find((row) => row.id === promptId)!;
+  const db = openDb();
+  db.prepare(
+    `UPDATE trace_events
+     SET status = 'compiled', compiler = 'claude', compiler_version = 1, error = NULL
+     WHERE prompt_id = ?`
+  ).run(promptId);
+
+  markTraceEvent(promptId, 'error', 'codex', 1, 'stale worker failure');
+  const trace = db
+    .prepare('SELECT status, attempts, error FROM trace_events WHERE prompt_id = ?')
+    .get(promptId) as { status: string; attempts: number; error: string | null };
+  assert.equal(trace.status, 'compiled');
+  assert.equal(trace.attempts, 0);
+  assert.equal(trace.error, null);
+
+  const rules = applyCompilation(
+    event,
+    [
+      {
+        action: 'NEW',
+        existingAtomicId: null,
+        kind: 'preference',
+        scope: 'project',
+        ruleText: 'Do not duplicate compiled events.',
+        appliesWhen: 'processing trace events',
+        doesNotApplyWhen: 'the event is still pending',
+      },
+    ],
+    new Map(),
+    'codex',
+    1
+  );
+  assert.equal(rules.length, 0);
+  const inserted = db
+    .prepare('SELECT COUNT(*) AS n FROM memory_rules WHERE source_prompt_id = ?')
+    .get(promptId) as { n: number };
+  assert.equal(inserted.n, 0);
+});
+
 test('codex native UserPromptSubmit hook records stdin payload', async () => {
   const { promptsForDay, localDay } = await import('../src/db.ts');
   const { codexHook } = await import('../src/hooks.ts');
