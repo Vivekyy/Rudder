@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -204,25 +204,145 @@ test('PWA manifest is installable and the service worker has a fetch handler', a
   assert.match(SERVICE_WORKER, /addEventListener\("fetch"/);
 });
 
-test('codex hook reads the notify JSON arg (agent-turn-complete only)', async () => {
+test('transcript reader extracts the latest user and assistant text', async () => {
+  const { readTranscriptContext } = await import('../src/transcript.ts');
+  const path = join(home, 'session.jsonl');
+  writeFileSync(
+    path,
+    [
+      JSON.stringify({ type: 'user', message: { content: 'Use pnpm here' } }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'I used npm.' }] },
+      }),
+      '{malformed',
+    ].join('\n')
+  );
+
+  assert.deepEqual(readTranscriptContext(path), {
+    lastUserText: 'Use pnpm here',
+    lastAssistantText: 'I used npm.',
+  });
+  assert.deepEqual(readTranscriptContext(join(home, 'missing.jsonl')), {
+    lastUserText: '',
+    lastAssistantText: '',
+  });
+});
+
+test('rule lifecycle stores versions and renders project-aware context', async () => {
+  const { insertPrompt, localDay } = await import('../src/db.ts');
+  const {
+    queueTraceEvent,
+    pendingTraceEvents,
+    applyRuleCandidate,
+    activeRules,
+    renderRuleContext,
+  } = await import('../src/rules.ts');
+  const promptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Always use pnpm in this repository',
+    cwd: '/repos/rule-project',
+    project: 'rule-project',
+  })!;
+  queueTraceEvent(promptId, null, 'install a dependency', 'used npm');
+  const event = pendingTraceEvents().find((row) => row.id === promptId)!;
+  assert.ok(event);
+
+  const first = applyRuleCandidate(
+    event,
+    {
+      action: 'NEW',
+      existingAtomicId: null,
+      kind: 'preference',
+      scope: 'project',
+      ruleText: 'Use pnpm instead of npm.',
+      appliesWhen: 'installing dependencies',
+      doesNotApplyWhen: 'the project explicitly requires another package manager',
+    },
+    0
+  )!;
+  assert.equal(first.version, 1);
+  assert.match(renderRuleContext('rule-project'), /Use pnpm instead of npm/);
+  assert.doesNotMatch(renderRuleContext('other-project'), /Use pnpm instead of npm/);
+
+  const updated = applyRuleCandidate(
+    event,
+    {
+      action: 'UPDATE',
+      existingAtomicId: first.atomic_id,
+      kind: 'preference',
+      scope: 'project',
+      ruleText: 'Use pnpm and preserve the lockfile.',
+      appliesWhen: 'installing or updating dependencies',
+      doesNotApplyWhen: 'the repository uses a different lockfile',
+    },
+    1
+  )!;
+  assert.equal(updated.version, 2);
+  assert.equal(
+    activeRules('rule-project').filter((rule) => rule.atomic_id === first.atomic_id).length,
+    1
+  );
+  assert.equal(localDay().length, 10);
+});
+
+test('compiler parser rejects malformed lifecycle output', async () => {
+  const { parseCompilation } = await import('../src/compiler.ts');
+  const parsed = parseCompilation(
+    JSON.stringify({
+      signal: true,
+      reason: 'explicit preference',
+      candidates: [
+        {
+          action: 'NEW',
+          existing_atomic_id: null,
+          kind: 'preference',
+          scope: 'global',
+          rule_text: 'Keep responses concise.',
+          applies_when: 'answering routine questions',
+          does_not_apply_when: 'detail is requested',
+        },
+      ],
+    })
+  );
+  assert.equal(parsed.candidates.length, 1);
+  assert.equal(parsed.candidates[0].ruleText, 'Keep responses concise.');
+  assert.throws(
+    () =>
+      parseCompilation(
+        '{"signal":true,"candidates":[{"action":"DELETE","kind":"preference","scope":"global"}]}'
+      ),
+    /unknown lifecycle action/
+  );
+  assert.deepEqual(parseCompilation('{"signal":false,"reason":"ordinary task","candidates":[]}'), {
+    signal: false,
+    reason: 'ordinary task',
+    candidates: [],
+  });
+});
+
+test('codex native UserPromptSubmit hook records stdin payload', async () => {
   const { promptsForDay, localDay } = await import('../src/db.ts');
   const { codexHook } = await import('../src/hooks.ts');
-
-  // Non-turn events are ignored.
-  await codexHook([JSON.stringify({ type: 'session-start' })]);
-
-  await codexHook([
-    JSON.stringify({
-      type: 'agent-turn-complete',
-      'turn-id': 't9',
-      'input-messages': ['Refactor auth', 'and add tests'],
-      cwd: '/repos/archer',
-    }),
-  ]);
+  const payload = JSON.stringify({
+    session_id: 's-codex',
+    turn_id: 't9',
+    prompt: 'Refactor auth and add tests',
+    cwd: '/repos/archer',
+  });
+  const { Readable } = await import('node:stream');
+  const fake = Readable.from([payload]) as unknown as NodeJS.ReadStream;
+  fake.isTTY = false;
+  const orig = process.stdin;
+  Object.defineProperty(process, 'stdin', { value: fake, configurable: true });
+  try {
+    await codexHook();
+  } finally {
+    Object.defineProperty(process, 'stdin', { value: orig, configurable: true });
+  }
 
   const rows = promptsForDay(localDay());
   const found = rows.find((r) => r.source === 'codex' && r.prompt.includes('Refactor auth'));
-  assert.ok(found, 'codex hook should record agent-turn-complete prompts');
-  assert.equal(found!.prompt, 'Refactor auth\nand add tests');
-  assert.equal(rows.filter((r) => r.source === 'codex').length, 1, 'non-turn event ignored');
+  assert.ok(found, 'codex hook should record UserPromptSubmit prompts');
+  assert.equal(found!.prompt, 'Refactor auth and add tests');
 });

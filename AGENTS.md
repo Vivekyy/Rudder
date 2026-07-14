@@ -8,7 +8,10 @@ Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 
 - `src/` — TypeScript sources (run directly via Node's type stripping in dev).
   - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
-  - `hooks.ts` — Claude/Codex capture hooks; best-effort `/notify` ping to the dashboard.
+ - `hooks.ts` — Claude/Codex `UserPromptSubmit` capture + learned-rule injection.
+ - `transcript.ts` — bounded, fail-open reading of Claude/Codex JSONL session tails.
+ - `compiler.ts` / `rules.ts` — TRACE-inspired rule compilation, lifecycle,
+ storage, retrieval, and prompt context rendering.
   - `classify.ts` — the single source of truth for the category/reaction rubric.
   - `tagger.ts` — classifies untagged prompts via the agent CLI (`ensureTagged`/`tagDay`).
   - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
@@ -46,6 +49,19 @@ dashboard and the digest can never disagree:
   rubric or prompt rendering changes in a way that should re-tag history.
 - The tagger inherits `RUDDER_DISABLE=1` via `runAgent`, so classifying a prompt
   never records the classification instruction as a new prompt.
+
+## Learned-rules pipeline
+
+Both Claude Code and Codex use native `UserPromptSubmit` hooks. The hook records
+the prompt, reads a bounded transcript tail for prior-turn evidence, queues a
+`trace_events` row, and injects already-compiled project/global rules as
+`additionalContext`. Compilation never runs in the hook: `rudder start`
+debounces it out-of-band, and `rudder rules` can run it explicitly.
+
+The compiler resolves atomic rules with `NEW`/`NOOP`/`UPDATE`/`SUPERSEDE`.
+`memory_rules` keeps immutable versions and `rule_evidence` preserves
+provenance. Prompt-time retrieval is a local SQLite query; no LLM runs on the
+hot path.
 
 ## Local development
 
@@ -142,9 +158,9 @@ Notes:
 
 ## Installing / re-wiring hooks
 
-`rudder init` creates the DB and installs the Claude Code `UserPromptSubmit` hook
-(`~/.claude/settings.json`) and the Codex `notify` program (`~/.codex/config.toml`).
-Both point at the absolute bin path of the rudder that ran `init`.
+`rudder init` creates the DB and installs native `UserPromptSubmit` hooks for
+Claude Code (`~/.claude/settings.json`) and Codex (`~/.codex/hooks.json`). Both
+point at the absolute bin path of the rudder that ran `init`.
 
 Because each Conductor/git worktree is a separate checkout but `~/.claude/settings.json`
 is global, a hook pointing into a specific worktree breaks once that worktree is

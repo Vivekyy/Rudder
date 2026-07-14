@@ -67,31 +67,49 @@ function installClaudeHook(): string {
   return `already present → ${settingsPath}`;
 }
 
-// ---- Codex: top-level `notify` in ~/.codex/config.toml ----------------------
+// ---- Codex: native UserPromptSubmit hook in ~/.codex/hooks.json -------------
 
 function installCodexHook(): string {
+  const codexDir = join(homedir(), '.codex');
+  const hooksPath = join(codexDir, 'hooks.json');
   const configPath = join(homedir(), '.codex', 'config.toml');
-  mkdirSync(dirname(configPath), { recursive: true });
+  mkdirSync(codexDir, { recursive: true });
 
   const argv = rudderArgv(['hook', 'codex']);
-  // TOML array of strings: ["/abs/node", "/abs/rudder.ts", "hook", "codex"]
-  const notifyLine = `notify = [${argv.map((p) => JSON.stringify(p)).join(', ')}]`;
-
-  let content = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
-
-  if (/^\s*notify\s*=/m.test(content)) {
-    if (content.includes(argv[1])) {
-      return `already present → ${configPath}`;
+  const command = quote(argv);
+  let hooks: Record<string, any> = {};
+  if (existsSync(hooksPath)) {
+    try {
+      hooks = JSON.parse(readFileSync(hooksPath, 'utf8')) || {};
+    } catch {
+      throw new Error(`Could not parse ${hooksPath} as JSON; fix it and retry.`);
     }
-    backup(configPath);
-    content = content.replace(/^\s*notify\s*=.*$/m, notifyLine);
-  } else {
-    backup(configPath);
-    // Top-level keys must precede any [table]; prepend to stay valid.
-    content = `${notifyLine}\n${content}`;
   }
-  writeFileSync(configPath, content);
-  return `installed → ${configPath}`;
+  hooks.hooks ??= {};
+  hooks.hooks.UserPromptSubmit ??= [];
+  const already = JSON.stringify(hooks.hooks.UserPromptSubmit).includes(argv[1]);
+  if (!already) {
+    hooks.hooks.UserPromptSubmit.push({
+      hooks: [{ type: 'command', command, timeout: 5 }],
+    });
+    backup(hooksPath);
+    writeFileSync(hooksPath, JSON.stringify(hooks, null, 2) + '\n');
+  }
+
+  // Remove Rudder's old post-turn `notify` integration. Do not disturb a notify
+  // command owned by another tool.
+  if (existsSync(configPath)) {
+    const content = readFileSync(configPath, 'utf8');
+    const migrated = content
+      .split('\n')
+      .filter((line) => !(/^\s*notify\s*=/.test(line) && /\brudder(?:\.[jt]s)?\b/i.test(line)))
+      .join('\n');
+    if (migrated !== content) {
+      backup(configPath);
+      writeFileSync(configPath, migrated);
+    }
+  }
+  return `${already ? 'already present' : 'installed'} → ${hooksPath}`;
 }
 
 export function init(): void {

@@ -26,6 +26,10 @@ Quick reference:
   out-of-band (never in the capture hook) and uses the shared rubric in
   `classify.ts`. Bump `TAGGER_VERSION` to re-tag history. See the "Stats pipeline"
   section in AGENTS.md.
+- Claude Code and Codex both use native `UserPromptSubmit` hooks. They record
+ prompts, queue bounded session evidence for out-of-band TRACE-style rule
+ compilation, and inject stored project/global rules locally at prompt time.
+ See the "Learned-rules pipeline" section in AGENTS.md.
 
 ## Slash commands
 

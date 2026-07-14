@@ -5,6 +5,8 @@ import { serve } from './serve.ts';
 import { ensureTagged } from './tagger.ts';
 import { statsForDay, untaggedPromptsForDay, type DayStats } from './tags.ts';
 import { localDay } from './db.ts';
+import { ensureCompiled } from './compiler.ts';
+import { allActiveRules } from './rules.ts';
 import { capture, captureException, shutdown } from './telemetry.ts';
 
 const HELP = `rudder — record your AI coding prompts and digest your day.
@@ -15,8 +17,9 @@ Usage:
   rudder stats [options]      Print today's correction rate and category breakdown
   rudder digest [options]     Summarize a day's work into a Markdown digest
   rudder tag [options]        Classify untagged prompts and print the day's stats
+  rudder rules [options]      Compile pending corrections and list active rules
   rudder hook claude          (internal) Record a Claude Code prompt from stdin
-  rudder hook codex           (internal) Record a Codex turn from the notify payload
+  rudder hook codex           (internal) Record a Codex prompt from stdin
   rudder help                 Show this help
 
 start options:
@@ -36,6 +39,10 @@ digest options:
 tag options:
   --date YYYY-MM-DD           Day to tag (default: today, local time)
   --agent claude|codex        Which LLM classifies prompts (default: claude, else codex)
+
+rules options:
+  --agent claude|codex        Which LLM compiles pending corrections
+  --no-compile                List stored rules without compiling pending prompts
 `;
 
 function parseFlags(args: string[]): Record<string, string> {
@@ -121,9 +128,36 @@ export async function main(argv: string[]): Promise<void> {
     case 'hook': {
       const which = rest[0];
       if (which === 'claude') return runHookSafely(() => claudeHook());
-      if (which === 'codex') return runHookSafely(() => codexHook(rest.slice(1)));
+      if (which === 'codex') return runHookSafely(() => codexHook());
       process.stderr.write("rudder: hook requires 'claude' or 'codex'\n");
       process.exit(0);
+      return;
+    }
+
+    case 'rules': {
+      const flags = parseFlags(rest);
+      const agent = parseAgentFlag(flags.agent);
+      try {
+        const pending =
+          flags['no-compile'] === 'true' ? undefined : ensureCompiled(agent);
+        const rules = allActiveRules();
+        const lines = [
+          `rudder — ${rules.length} active learned rule${rules.length === 1 ? '' : 's'}`,
+          ...(pending === undefined ? [] : [`${pending} prompt${pending === 1 ? '' : 's'} pending compilation`]),
+          ...rules.map(
+            (rule) =>
+              `- [${rule.atomic_id} v${rule.version}] (${rule.scope}${rule.project ? `:${rule.project}` : ''}) ` +
+              `${rule.rule_text} — when ${rule.applies_when}`
+          ),
+        ];
+        process.stdout.write(lines.join('\n') + '\n');
+        await shutdown();
+      } catch (err) {
+        captureException(err);
+        await shutdown();
+        console.error(`rudder: ${(err as Error).message}`);
+        process.exit(1);
+      }
       return;
     }
 

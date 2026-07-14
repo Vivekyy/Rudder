@@ -1,5 +1,7 @@
 import { basename } from 'node:path';
-import { insertPrompt, rudderPort } from './db.ts';
+import { insertPrompt, rudderPort, type Source } from './db.ts';
+import { queueTraceEvent, renderRuleContext } from './rules.ts';
+import { readTranscriptContext } from './transcript.ts';
 import { capture } from './telemetry.ts';
 
 /**
@@ -46,21 +48,21 @@ function safeParse(str: string): Record<string, unknown> | null {
   }
 }
 
-/**
- * Claude Code `UserPromptSubmit` hook. Receives a JSON payload on stdin:
- *   { session_id, transcript_path, cwd, hook_event_name, prompt }
- */
-export async function claudeHook(): Promise<void> {
+/** Shared Claude Code/Codex `UserPromptSubmit` capture and context hook. */
+async function promptHook(source: Source): Promise<void> {
   if (process.env.RUDDER_DISABLE) return; // skip our own `rudder digest` agent call
   const raw = await readStdin();
   const payload = safeParse(raw) ?? {};
   const cwd =
-    (payload.cwd as string) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+    (payload.cwd as string) ||
+    (source === 'claude' ? process.env.CLAUDE_PROJECT_DIR : process.env.CODEX_WORKSPACE_ROOT) ||
+    process.cwd();
   const project = projectFromCwd(cwd);
   const model = (payload.model as string) ?? null;
+  const prompt = payload.prompt as string;
   const id = insertPrompt({
-    source: 'claude',
-    prompt: payload.prompt as string,
+    source,
+    prompt,
     session_id: payload.session_id as string,
     cwd,
     project,
@@ -68,58 +70,41 @@ export async function claudeHook(): Promise<void> {
     raw,
   });
   if (id !== null) {
+    const transcriptPath = (payload.transcript_path as string) ?? null;
+    const transcript = readTranscriptContext(transcriptPath);
+    queueTraceEvent(
+      id,
+      transcriptPath,
+      transcript.lastUserText,
+      transcript.lastAssistantText
+    );
     await notifyDashboard();
     capture('prompt recorded', {
-      source: 'claude',
+      source,
       has_project: project !== null,
       has_model: model !== null,
+      has_transcript: transcriptPath !== null,
     });
+  }
+  const additionalContext = renderRuleContext(project);
+  if (additionalContext) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext,
+        },
+      })
+    );
   }
 }
 
-/**
- * Codex `notify` program. Codex passes a JSON string as the final CLI argument
- * (older builds pipe it on stdin). We care about `agent-turn-complete`, whose
- * `input-messages` array holds the user's prompt(s) for the turn.
- */
-export async function codexHook(argv: string[]): Promise<void> {
-  if (process.env.RUDDER_DISABLE) return; // skip our own `rudder digest` agent call
-  let raw = argv.find((a) => a && a.trim().startsWith('{'));
-  if (!raw) raw = await readStdin();
-  const payload = safeParse(raw ?? '') ?? {};
+/** Claude Code `UserPromptSubmit` hook. */
+export function claudeHook(): Promise<void> {
+  return promptHook('claude');
+}
 
-  const type = payload.type as string | undefined;
-  if (type && type !== 'agent-turn-complete') return; // only record user turns
-
-  const messages =
-    (payload['input-messages'] as unknown) ?? (payload.input_messages as unknown) ?? [];
-  const prompt = Array.isArray(messages)
-    ? messages.join('\n').trim()
-    : String(messages || '');
-  const cwd =
-    (payload.cwd as string) || process.env.CODEX_WORKSPACE_ROOT || null;
-
-  const project = projectFromCwd(cwd);
-  const model = (payload.model as string) ?? null;
-  const id = insertPrompt({
-    source: 'codex',
-    prompt,
-    session_id:
-      (payload['turn-id'] as string) ??
-      (payload.turn_id as string) ??
-      (payload.session_id as string) ??
-      null,
-    cwd,
-    project,
-    model,
-    raw,
-  });
-  if (id !== null) {
-    await notifyDashboard();
-    capture('prompt recorded', {
-      source: 'codex',
-      has_project: project !== null,
-      has_model: model !== null,
-    });
-  }
+/** Codex native `UserPromptSubmit` hook. */
+export function codexHook(): Promise<void> {
+  return promptHook('codex');
 }

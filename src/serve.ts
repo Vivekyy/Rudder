@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { localDay, rudderPort } from './db.ts';
 import { statsForDay } from './tags.ts';
 import { ensureTagged } from './tagger.ts';
+import { ensureCompiled } from './compiler.ts';
 import { resolveAgent, type Agent } from './agent.ts';
 import { PAGE_HTML, INSTALL_HTML, MANIFEST, SERVICE_WORKER } from './ui.ts';
 import { pngIcon } from './icon.ts';
@@ -126,7 +127,10 @@ export function serve(opts: ServeOptions = {}): void {
     }
     tagging = true;
     try {
-      if (agent) ensureTagged(localDay(), agent);
+      if (agent) {
+        ensureTagged(localDay(), agent);
+        ensureCompiled(agent);
+      }
     } finally {
       tagging = false;
       broadcast();

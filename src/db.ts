@@ -71,6 +71,48 @@ export function openDb(): DatabaseSync {
       ts             TEXT NOT NULL           -- when it was tagged (ISO 8601 UTC)
     );
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS trace_events (
+      prompt_id        INTEGER PRIMARY KEY REFERENCES prompts(id),
+      transcript_path  TEXT,
+      task_text        TEXT,
+      behavior_text    TEXT,
+      status           TEXT NOT NULL DEFAULT 'pending',
+      compiler         TEXT,
+      compiler_version INTEGER,
+      error            TEXT,
+      ts               TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory_rules (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      atomic_id             TEXT NOT NULL,
+      version               INTEGER NOT NULL,
+      status                TEXT NOT NULL,
+      kind                  TEXT NOT NULL,
+      scope                 TEXT NOT NULL,
+      project               TEXT,
+      rule_text             TEXT NOT NULL,
+      applies_when          TEXT NOT NULL,
+      does_not_apply_when   TEXT NOT NULL,
+      source_prompt_id      INTEGER REFERENCES prompts(id),
+      supersedes_rule_id    INTEGER REFERENCES memory_rules(id),
+      created_at            TEXT NOT NULL,
+      updated_at            TEXT NOT NULL,
+      UNIQUE (atomic_id, version)
+    );
+
+    CREATE TABLE IF NOT EXISTS rule_evidence (
+      rule_id    INTEGER NOT NULL REFERENCES memory_rules(id),
+      prompt_id  INTEGER NOT NULL REFERENCES prompts(id),
+      action     TEXT NOT NULL,
+      ts         TEXT NOT NULL,
+      PRIMARY KEY (rule_id, prompt_id)
+    );
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_trace_events_status ON trace_events(status);');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_memory_rules_status ON memory_rules(status);');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_memory_rules_project ON memory_rules(project);');
   _db = db;
   return db;
 }
