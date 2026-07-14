@@ -454,6 +454,81 @@ test('compilation applies only the last candidate for a repeated existing rule t
   assert.equal(superseded.status, 'superseded');
 });
 
+test('compilation rejects mixed actions for a repeated existing rule target', async () => {
+  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { queueTraceEvent, pendingTraceEvents, applyRuleCandidate, applyCompilation, activeRules } =
+    await import('../src/rules.ts');
+  const firstPromptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Prefer stable rule IDs',
+    cwd: '/repos/mixed-target',
+    project: 'mixed-target',
+  })!;
+  queueTraceEvent(firstPromptId, null, '', '');
+  const firstEvent = pendingTraceEvents().find((row) => row.id === firstPromptId)!;
+  const first = applyRuleCandidate(
+    firstEvent,
+    {
+      action: 'NEW',
+      existingAtomicId: null,
+      kind: 'preference',
+      scope: 'project',
+      ruleText: 'Keep rule IDs stable.',
+      appliesWhen: 'updating learned rules',
+      doesNotApplyWhen: 'creating unrelated rules',
+    },
+    0
+  )!;
+  const secondPromptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Conflicting repeated target',
+    cwd: '/repos/mixed-target',
+    project: 'mixed-target',
+  })!;
+  queueTraceEvent(secondPromptId, null, '', '');
+  const secondEvent = pendingTraceEvents().find((row) => row.id === secondPromptId)!;
+
+  assert.throws(
+    () =>
+      applyCompilation(
+        secondEvent,
+        [
+          {
+            action: 'SUPERSEDE',
+            existingAtomicId: first.atomic_id,
+            kind: 'preference',
+            scope: 'project',
+            ruleText: 'Replace the rule ID.',
+            appliesWhen: 'updating learned rules',
+            doesNotApplyWhen: 'creating unrelated rules',
+          },
+          {
+            action: 'NOOP',
+            existingAtomicId: first.atomic_id,
+            kind: 'preference',
+            scope: 'project',
+            ruleText: 'Keep rule IDs stable.',
+            appliesWhen: 'updating learned rules',
+            doesNotApplyWhen: 'creating unrelated rules',
+          },
+        ],
+        new Map([[first.atomic_id, first.version]]),
+        'claude',
+        1
+      ),
+    /conflicting lifecycle actions/
+  );
+
+  assert.deepEqual(
+    activeRules('/repos/mixed-target').map((rule) => rule.rule_text),
+    ['Keep rule IDs stable.']
+  );
+  const trace = openDb()
+    .prepare('SELECT status FROM trace_events WHERE prompt_id = ?')
+    .get(secondPromptId) as { status: string };
+  assert.equal(trace.status, 'pending');
+});
+
 test('completed trace events are not reprocessed by stale workers', async () => {
   const { insertPrompt, openDb } = await import('../src/db.ts');
   const { queueTraceEvent, pendingTraceEvents, claimTraceEvent, markTraceEvent, applyCompilation } =

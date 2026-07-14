@@ -335,6 +335,18 @@ function processableTraceEvent(
 function lastCandidatePerExistingTarget(
   candidates: RuleCandidate[]
 ): { candidate: RuleCandidate; index: number }[] {
+  const actionsByTarget = new Map<string, RuleAction>();
+  for (const candidate of candidates) {
+    if (!candidate.existingAtomicId) continue;
+    const action = actionsByTarget.get(candidate.existingAtomicId);
+    if (action && action !== candidate.action) {
+      throw new Error(
+        `conflicting lifecycle actions for active rule '${candidate.existingAtomicId}'`
+      );
+    }
+    actionsByTarget.set(candidate.existingAtomicId, candidate.action);
+  }
+
   const seen = new Set<string>();
   const kept: { candidate: RuleCandidate; index: number }[] = [];
   for (let index = candidates.length - 1; index >= 0; index--) {
