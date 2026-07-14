@@ -50,16 +50,22 @@ class NodeSQLiteSession<
   TFullSchema extends Record<string, unknown>,
   TSchema extends TablesRelationalConfig,
 > extends SQLiteSession<'sync', NodeSQLiteRunResult, TFullSchema, TSchema> {
+  private readonly client: DatabaseSync;
+  private readonly syncDialect: SQLiteSyncDialect;
+  private readonly schema: RelationalSchemaConfig<TSchema> | undefined;
   private readonly logger: Logger;
   private readonly cache: Cache;
 
   constructor(
-    private readonly client: DatabaseSync,
-    private readonly syncDialect: SQLiteSyncDialect,
-    private readonly schema: RelationalSchemaConfig<TSchema> | undefined,
+    client: DatabaseSync,
+    syncDialect: SQLiteSyncDialect,
+    schema: RelationalSchemaConfig<TSchema> | undefined,
     options: NodeSQLiteSessionOptions = {}
   ) {
     super(syncDialect);
+    this.client = client;
+    this.syncDialect = syncDialect;
+    this.schema = schema;
     this.logger = options.logger ?? new NoopLogger();
     this.cache = options.cache ?? new NoopCache();
   }
@@ -112,14 +118,19 @@ class NodeSQLiteTransaction<
   TFullSchema extends Record<string, unknown>,
   TSchema extends TablesRelationalConfig,
 > extends SQLiteTransaction<'sync', NodeSQLiteRunResult, TFullSchema, TSchema> {
+  private readonly syncDialect: SQLiteSyncDialect;
+  private readonly nodeSession: NodeSQLiteSession<TFullSchema, TSchema>;
+
   constructor(
     resultType: 'sync',
-    private readonly syncDialect: SQLiteSyncDialect,
-    private readonly nodeSession: NodeSQLiteSession<TFullSchema, TSchema>,
+    syncDialect: SQLiteSyncDialect,
+    nodeSession: NodeSQLiteSession<TFullSchema, TSchema>,
     schema: RelationalSchemaConfig<TSchema> | undefined,
     nestedIndex = 0
   ) {
     super(resultType, syncDialect, nodeSession, schema, nestedIndex);
+    this.syncDialect = syncDialect;
+    this.nodeSession = nodeSession;
   }
 
   transaction<T>(transaction: (tx: NodeSQLiteTransaction<TFullSchema, TSchema>) => T): T {
@@ -154,20 +165,30 @@ class NodeSQLitePreparedQuery<
   execute: T['execute'];
 }> {
   joinsNotNullableMap?: Record<string, boolean>;
+  private readonly stmt: StatementSync;
+  private readonly logger: Logger;
+  private readonly fields: SelectedFieldsOrdered | undefined;
+  private readonly isArrayMode: boolean;
+  private readonly customResultMapper: ((rows: unknown[][]) => unknown) | undefined;
 
   constructor(
-    private readonly stmt: StatementSync,
+    stmt: StatementSync,
     query: Query,
-    private readonly logger: Logger,
+    logger: Logger,
     cache: Cache,
     queryMetadata: { type: 'select' | 'update' | 'delete' | 'insert'; tables: string[] } | undefined,
     cacheConfig: WithCacheConfig | undefined,
-    private readonly fields: SelectedFieldsOrdered | undefined,
+    fields: SelectedFieldsOrdered | undefined,
     executeMethod: SQLiteExecuteMethod,
-    private readonly isArrayMode: boolean,
-    private readonly customResultMapper?: (rows: unknown[][]) => unknown
+    isArrayMode: boolean,
+    customResultMapper?: (rows: unknown[][]) => unknown
   ) {
     super('sync', executeMethod, query, cache, queryMetadata, cacheConfig);
+    this.stmt = stmt;
+    this.logger = logger;
+    this.fields = fields;
+    this.isArrayMode = isArrayMode;
+    this.customResultMapper = customResultMapper;
   }
 
   run(placeholderValues?: Record<string, unknown>): NodeSQLiteRunResult {
