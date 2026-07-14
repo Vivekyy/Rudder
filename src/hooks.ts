@@ -86,7 +86,7 @@ async function promptHook(source: Source): Promise<void> {
       has_transcript: transcriptPath !== null,
     });
   }
-  const additionalContext = renderRuleContext(project);
+  const additionalContext = renderRuleContext(cwd);
   if (additionalContext) {
     process.stdout.write(
       JSON.stringify({

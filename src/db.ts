@@ -81,6 +81,7 @@ export function openDb(): DatabaseSync {
       compiler         TEXT,
       compiler_version INTEGER,
       error            TEXT,
+      attempts         INTEGER NOT NULL DEFAULT 0,
       ts               TEXT NOT NULL
     );
 

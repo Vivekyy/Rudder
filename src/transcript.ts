@@ -11,6 +11,10 @@ function entryRole(entry: Record<string, unknown>): 'user' | 'assistant' | null 
   const type = entry.type;
   if (type === 'user' || type === 'user.message') return 'user';
   if (type === 'assistant' || type === 'assistant.message') return 'assistant';
+  if (type === 'response_item' && entry.payload && typeof entry.payload === 'object') {
+    const role = (entry.payload as Record<string, unknown>).role;
+    if (role === 'user' || role === 'assistant') return role;
+  }
   return null;
 }
 
@@ -21,13 +25,16 @@ function textBlocks(value: unknown): string {
     .flatMap((item) => {
       if (!item || typeof item !== 'object') return [];
       const block = item as Record<string, unknown>;
-      return block.type === 'text' && typeof block.text === 'string' ? [block.text] : [];
+      return ['text', 'input_text', 'output_text'].includes(String(block.type)) &&
+        typeof block.text === 'string'
+        ? [block.text]
+        : [];
     })
     .join('\n');
 }
 
 function entryText(entry: Record<string, unknown>): string {
-  for (const key of ['message', 'data']) {
+  for (const key of ['message', 'data', 'payload']) {
     const container = entry[key];
     if (container && typeof container === 'object') {
       const text = textBlocks((container as Record<string, unknown>).content);

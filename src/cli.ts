@@ -112,7 +112,11 @@ async function runHookSafely(fn: () => Promise<void>): Promise<void> {
   } catch (err) {
     process.stderr.write(`rudder hook error (ignored): ${(err as Error).message}\n`);
   }
-  await shutdown();
+  try {
+    await shutdown();
+  } catch {
+    /* telemetry teardown must not make a capture hook fail */
+  }
   process.exit(0);
 }
 

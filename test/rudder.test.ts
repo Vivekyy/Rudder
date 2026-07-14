@@ -223,6 +223,31 @@ test('transcript reader extracts the latest user and assistant text', async () =
     lastUserText: 'Use pnpm here',
     lastAssistantText: 'I used npm.',
   });
+  writeFileSync(
+    path,
+    [
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'Keep the API stable' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'I renamed the endpoint.' }],
+        },
+      }),
+    ].join('\n')
+  );
+  assert.deepEqual(readTranscriptContext(path), {
+    lastUserText: 'Keep the API stable',
+    lastAssistantText: 'I renamed the endpoint.',
+  });
   assert.deepEqual(readTranscriptContext(join(home, 'missing.jsonl')), {
     lastUserText: '',
     lastAssistantText: '',
@@ -262,7 +287,7 @@ test('rule lifecycle stores versions and renders project-aware context', async (
     0
   )!;
   assert.equal(first.version, 1);
-  assert.match(renderRuleContext('rule-project'), /Use pnpm instead of npm/);
+  assert.match(renderRuleContext('/repos/rule-project'), /Use pnpm instead of npm/);
   assert.doesNotMatch(renderRuleContext('other-project'), /Use pnpm instead of npm/);
 
   const updated = applyRuleCandidate(
@@ -280,7 +305,7 @@ test('rule lifecycle stores versions and renders project-aware context', async (
   )!;
   assert.equal(updated.version, 2);
   assert.equal(
-    activeRules('rule-project').filter((rule) => rule.atomic_id === first.atomic_id).length,
+    activeRules('/repos/rule-project').filter((rule) => rule.atomic_id === first.atomic_id).length,
     1
   );
   assert.equal(localDay().length, 10);
@@ -319,6 +344,44 @@ test('compiler parser rejects malformed lifecycle output', async () => {
     reason: 'ordinary task',
     candidates: [],
   });
+});
+
+test('compilation rolls back all candidates when one lifecycle action fails', async () => {
+  const { insertPrompt, openDb } = await import('../src/db.ts');
+  const { queueTraceEvent, pendingTraceEvents, applyCompilation } = await import('../src/rules.ts');
+  const promptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Remember two independent preferences',
+    cwd: '/repos/atomic-project',
+    project: 'atomic-project',
+  })!;
+  queueTraceEvent(promptId, null, '', '');
+  const event = pendingTraceEvents().find((row) => row.id === promptId)!;
+  const base = {
+    kind: 'preference' as const,
+    scope: 'project' as const,
+    ruleText: 'Use the repository package manager.',
+    appliesWhen: 'installing dependencies',
+    doesNotApplyWhen: 'no package manager exists',
+  };
+  assert.throws(
+    () =>
+      applyCompilation(
+        event,
+        [
+          { ...base, action: 'NEW', existingAtomicId: null },
+          { ...base, action: 'UPDATE', existingAtomicId: 'not-in-snapshot' },
+        ],
+        new Map(),
+        'claude',
+        1
+      ),
+    /was not found/
+  );
+  const row = openDb()
+    .prepare('SELECT COUNT(*) AS n FROM memory_rules WHERE source_prompt_id = ?')
+    .get(promptId) as { n: number };
+  assert.equal(row.n, 0, 'the first candidate must roll back with the failed second candidate');
 });
 
 test('codex native UserPromptSubmit hook records stdin payload', async () => {

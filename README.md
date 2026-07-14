@@ -106,6 +106,10 @@ rudder init                       # creates the database and installs the hooks
 Existing config files are backed up to `*.rudder-bak` before being modified, and
 the command is idempotent — running it twice won't duplicate the hooks.
 
+Codex requires one-time trust approval for new command hooks. Review and approve
+the Rudder entry when Codex prompts on the next interactive session (or inspect
+it through `/hooks`); Codex silently skips the hook until it is trusted.
+
 ### From source
 
 ```bash

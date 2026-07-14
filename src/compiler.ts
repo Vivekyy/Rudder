@@ -1,9 +1,10 @@
 import { runAgent, resolveAgent, type Agent } from './agent.ts';
 import {
   activeRules,
-  applyRuleCandidate,
+  applyCompilation,
   markTraceEvent,
   pendingTraceEvents,
+  type MemoryRule,
   type RuleAction,
   type RuleCandidate,
   type RuleKind,
@@ -68,6 +69,9 @@ export function parseCompilation(output: string): CompilationResult {
     if (action !== 'NEW' && !existingAtomicId) {
       throw new Error(`${action} candidate requires existing_atomic_id`);
     }
+    if (action === 'NEW' && existingAtomicId) {
+      throw new Error('NEW candidate cannot reference existing_atomic_id');
+    }
     return {
       action,
       existingAtomicId,
@@ -85,8 +89,8 @@ function clipped(text: string | null | undefined, max = 8_000): string {
   return (text ?? '').slice(0, max);
 }
 
-function compilationInstruction(event: TraceEvent): string {
-  const existing = activeRules(event.project).map((rule) => ({
+function compilationInstruction(event: TraceEvent, active: MemoryRule[]): string {
+  const existing = active.map((rule) => ({
     atomic_id: rule.atomic_id,
     version: rule.version,
     kind: rule.kind,
@@ -127,13 +131,24 @@ ${JSON.stringify(existing)}`;
 }
 
 export function compileEvent(event: TraceEvent, agent: Agent): CompilationResult {
-  const result = parseCompilation(runAgent(agent, compilationInstruction(event)));
+  const active = activeRules(event.cwd ?? event.project);
+  const result = parseCompilation(runAgent(agent, compilationInstruction(event, active)));
   if (!result.signal) {
     markTraceEvent(event.id, 'skipped', agent, COMPILER_VERSION);
     return result;
   }
-  result.candidates.forEach((candidate, index) => applyRuleCandidate(event, candidate, index));
-  markTraceEvent(event.id, 'compiled', agent, COMPILER_VERSION);
+  const expectedVersions = new Map(active.map((rule) => [rule.atomic_id, rule.version]));
+  for (const candidate of result.candidates) {
+    if (
+      candidate.existingAtomicId &&
+      !expectedVersions.has(candidate.existingAtomicId)
+    ) {
+      throw new Error(
+        `compiler referenced rule '${candidate.existingAtomicId}' outside the active project scope`
+      );
+    }
+  }
+  applyCompilation(event, result.candidates, expectedVersions, agent, COMPILER_VERSION);
   return result;
 }
 
