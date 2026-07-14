@@ -198,11 +198,13 @@ export function serve(opts: ServeOptions = {}): void {
     }
 
     if (pathname === '/install') {
+      capture('install page viewed', { platform: process.platform });
       send(res, 200, 'text/html; charset=utf-8', INSTALL_HTML);
       return;
     }
 
     if (pathname === '/') {
+      capture('dashboard viewed', { platform: process.platform });
       send(res, 200, 'text/html; charset=utf-8', PAGE_HTML);
       return;
     }

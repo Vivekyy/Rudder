@@ -99,6 +99,10 @@ function fillStats(body: string, stats: DayStats): string {
 
 export function digest(opts: DigestOptions = {}): string {
   const day = opts.day || localDay();
+  capture('digest requested', {
+    day,
+    custom_out: opts.out !== undefined,
+  });
   const rows = promptsForDay(day);
   if (rows.length === 0) {
     throw new Error(`No prompts recorded for ${day}. Nothing to digest.`);
