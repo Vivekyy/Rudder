@@ -45,14 +45,14 @@
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^1.0.0-rc.4",
     "posthog-node": "^5.41.0",
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
     "@types/node": "^24",
     "@types/shell-quote": "^1.7.5",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^1.0.0-rc.4",
     "typescript": "^5.7.0"
   },
   "overrides": {

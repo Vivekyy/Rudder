@@ -3,9 +3,8 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { readMigrationFiles, type MigrationConfig, type MigrationMeta } from 'drizzle-orm/migrator';
-import { drizzleNodeSqlite } from './node-sqlite.ts';
-import { schema } from './schema.ts';
+import { drizzle, type NodeSQLiteDatabase } from 'drizzle-orm/node-sqlite';
+import { migrate } from 'drizzle-orm/node-sqlite/migrator';
 
 /** Root directory for all rudder state. Override with RUDDER_HOME (used by tests). */
 export function rudderHome(): string {
@@ -17,14 +16,9 @@ export function dbPath(): string {
 }
 
 let _sqlite: DatabaseSync | null = null;
-let _drizzle: ReturnType<typeof drizzleNodeSqlite<typeof schema>> | null = null;
+let _drizzle: RudderDb | null = null;
 
-type MigratableDrizzleDb = ReturnType<typeof drizzleNodeSqlite<typeof schema>> & {
-  dialect: {
-    migrate(migrations: MigrationMeta[], session: unknown, config: MigrationConfig): void;
-  };
-  session: unknown;
-};
+type RudderDb = ReturnType<typeof drizzle>;
 
 function packageRoot(moduleUrl = import.meta.url): string {
   const modulePath = fileURLToPath(moduleUrl);
@@ -36,10 +30,8 @@ export function migrationsFolder(moduleUrl = import.meta.url): string {
   return join(packageRoot(moduleUrl), 'drizzle');
 }
 
-function applyMigrations(db: MigratableDrizzleDb): void {
-  const config = { migrationsFolder: migrationsFolder() };
-  const migrations = readMigrationFiles(config);
-  db.dialect.migrate(migrations, db.session, config);
+function applyMigrations(db: NodeSQLiteDatabase): void {
+  migrate(db, { migrationsFolder: migrationsFolder() });
 }
 
 export function openDb(): DatabaseSync {
@@ -47,17 +39,17 @@ export function openDb(): DatabaseSync {
   mkdirSync(rudderHome(), { recursive: true });
   const db = new DatabaseSync(dbPath());
   db.exec('PRAGMA journal_mode = WAL;');
-  _drizzle = drizzleNodeSqlite(db, { schema });
-  applyMigrations(_drizzle as MigratableDrizzleDb);
+  _drizzle = drizzle({ client: db });
+  applyMigrations(_drizzle);
   _sqlite = db;
   return db;
 }
 
-export function rudderDb(): ReturnType<typeof drizzleNodeSqlite<typeof schema>> {
+export function rudderDb(): RudderDb {
   if (!_drizzle) {
-    _drizzle = drizzleNodeSqlite(openDb(), { schema });
+    openDb();
   }
-  return _drizzle;
+  return _drizzle!;
 }
 
 /** TCP port the `rudder start` dashboard daemon listens on (override with RUDDER_PORT). */
