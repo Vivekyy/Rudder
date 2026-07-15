@@ -1,11 +1,11 @@
 name: Publish packages and releases
 
-# Publishes @ruddercode/rudder-core to npmjs.org and GitHub Packages, then creates the
+# Publishes @vivekyy/rudder to npmjs.org and GitHub Packages, then creates the
 # GitHub Release, automatically on merge to main — no manual tagging step. On
 # every push to main this single job:
 #
 #   1. computes v<version> from package.json.
-#   2. publishes to npmjs.org if that package name/version is missing.
+#   2. publishes to npmjs.org if that tag does not exist.
 #   3. publishes to GitHub Packages if that registry is missing the version.
 #   4. pushes the v<version> tag, if needed, only after both registries are
 #      satisfied.
@@ -57,26 +57,16 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "scope=${scope}" >> "$GITHUB_OUTPUT"
 
-          if npm_view_output="$(npm view "${name}@${version}" version --registry=https://registry.npmjs.org 2>&1)"; then
-            echo "npmjs.org already has ${name}@${version}."
-            npm_publish=false
-          elif [[ "${npm_view_output}" == *"E404"* || "${npm_view_output}" == *"404 Not Found"* ]]; then
-            echo "npmjs.org is missing ${name}@${version} — will publish."
-            npm_publish=true
-          else
-            echo "::error::Could not determine whether npmjs.org has ${name}@${version}."
-            printf '%s\n' "${npm_view_output}"
-            exit 1
-          fi
-          echo "npm_publish=${npm_publish}" >> "$GITHUB_OUTPUT"
-
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists."
+            echo "Tag ${tag} already exists — npmjs.org release already shipped."
+            npm_publish=false
             echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Tag ${tag} not found — will tag after package registries are satisfied."
+            echo "Tag ${tag} not found — will publish to npmjs.org and tag after success."
+            npm_publish=true
             echo "tag_exists=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "npm_publish=${npm_publish}" >> "$GITHUB_OUTPUT"
 
           npmrc="${RUNNER_TEMP}/github-packages.npmrc"
           {
