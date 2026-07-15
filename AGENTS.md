@@ -7,8 +7,8 @@ Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 ## Layout
 
 - `src/` — TypeScript sources (run directly via Node's type stripping in dev).
-  - `db/` — Drizzle schema/client, generated-migration runner, prompt queries,
-    and the custom `node:sqlite` driver.
+  - `db/` — Drizzle schema/client, generated-migration runner, and prompt queries
+    on Drizzle's native `node:sqlite` driver.
   - `hooks.ts` — Claude/Codex `UserPromptSubmit` capture + learned-rule injection.
   - `transcript.ts` — bounded, fail-open reading of Claude/Codex JSONL session tails.
   - `compiler.ts` / `rules.ts` — TRACE-inspired rule compilation, lifecycle,
