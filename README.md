@@ -2,6 +2,7 @@
 
 [![Discord](https://img.shields.io/badge/discord-community-5865F2?logo=discord&logoColor=white)](https://discord.gg/tmjdmhp4xD)
 [![npm](https://img.shields.io/npm/v/%40ruddercode%2Frudder-core?label=npm&color=orange&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ruddercode/rudder-core)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 **Rudder records the prompts you give your AI coding assistants and turns a day's
 worth of them into a readable summary of what you actually worked on.**
