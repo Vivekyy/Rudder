@@ -1,5 +1,9 @@
 # Rudder
 
+[![Discord](https://img.shields.io/badge/discord-community-5865F2?logo=discord&logoColor=white)](https://discord.gg/tmjdmhp4xD)
+[![npm](https://img.shields.io/npm/v/%40ruddercode%2Frudder-core?label=npm&color=orange&logo=npm&logoColor=white)](https://www.npmjs.com/package/@ruddercode/rudder-core)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
 **Rudder records the prompts you give your AI coding assistants and turns a day's
 worth of them into a readable summary of what you actually worked on.**
 
@@ -19,7 +23,7 @@ every prompt you send to a local SQLite database.
 ## Quickstart
 
 ```bash
-npm install -g @vivekyy/rudder    # puts `rudder` on your PATH
+npm install -g @ruddercode/rudder-core    # puts `rudder` on your PATH
 rudder init                       # create the database and install the hooks
 ```
 
@@ -80,7 +84,7 @@ do?"
 ## Install
 
 ```bash
-npm install -g @vivekyy/rudder    # puts `rudder` on your PATH
+npm install -g @ruddercode/rudder-core    # puts `rudder` on your PATH
 rudder init                       # creates the database and installs the hooks
 ```
 
@@ -109,7 +113,7 @@ rudder init
 ## Upgrade
 
 ```bash
-npm update -g @vivekyy/rudder    # or: npm install -g @vivekyy/rudder@latest
+npm update -g @ruddercode/rudder-core    # or: npm install -g @ruddercode/rudder-core@latest
 ```
 
 The hooks point at the global install's absolute path, which is stable across
