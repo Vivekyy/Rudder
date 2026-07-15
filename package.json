@@ -54,5 +54,8 @@
     "@types/shell-quote": "^1.7.5",
     "drizzle-kit": "^0.31.10",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
   }
 }
