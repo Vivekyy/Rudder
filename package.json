@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "assets",
+    "drizzle",
     "README.md",
     "LICENSE"
   ],
@@ -37,6 +38,7 @@
     "url": "https://github.com/Vivekyy/Rudder/issues"
   },
   "scripts": {
+    "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "node --test test/*.ts",
@@ -50,6 +52,7 @@
   "devDependencies": {
     "@types/node": "^24",
     "@types/shell-quote": "^1.7.5",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.7.0"
   }
 }

@@ -65,6 +65,18 @@ test('rudderBinPath matches the bin extension to the loading module', async () =
   assert.equal(rudderBinPath(jsUrl), join('/repo', 'dist', 'bin', 'rudder.js'));
 });
 
+test('migrationsFolder resolves from source and published layouts', async () => {
+  const { migrationsFolder } = await import('../src/db/client.ts');
+  const { pathToFileURL } = await import('node:url');
+  const { join } = await import('node:path');
+
+  const tsUrl = pathToFileURL(join('/repo', 'src', 'db', 'client.ts')).href;
+  assert.equal(migrationsFolder(tsUrl), join('/repo', 'drizzle'));
+
+  const jsUrl = pathToFileURL(join('/repo', 'dist', 'src', 'db', 'client.js')).href;
+  assert.equal(migrationsFolder(jsUrl), join('/repo', 'drizzle'));
+});
+
 test('claude hook parses stdin JSON into a row', async () => {
   const { promptsForDay, localDay } = await import('../src/db/index.ts');
   const { claudeHook } = await import('../src/hooks.ts');

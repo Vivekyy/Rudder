@@ -1,4 +1,12 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from 'drizzle-orm/sqlite-core';
 
 export const prompts = sqliteTable(
   'prompts',
@@ -21,7 +29,9 @@ export const prompts = sqliteTable(
 );
 
 export const promptTags = sqliteTable('prompt_tags', {
-  prompt_id: integer('prompt_id').primaryKey(),
+  prompt_id: integer('prompt_id')
+    .primaryKey()
+    .references(() => prompts.id),
   category: text('category').notNull(),
   reaction: text('reaction').notNull(),
   tagger: text('tagger').notNull(),
@@ -32,7 +42,9 @@ export const promptTags = sqliteTable('prompt_tags', {
 export const traceEvents = sqliteTable(
   'trace_events',
   {
-    prompt_id: integer('prompt_id').primaryKey(),
+    prompt_id: integer('prompt_id')
+      .primaryKey()
+      .references(() => prompts.id),
     transcript_path: text('transcript_path'),
     task_text: text('task_text'),
     behavior_text: text('behavior_text'),
@@ -61,8 +73,10 @@ export const memoryRules = sqliteTable(
     rule_text: text('rule_text').notNull(),
     applies_when: text('applies_when').notNull(),
     does_not_apply_when: text('does_not_apply_when').notNull(),
-    source_prompt_id: integer('source_prompt_id'),
-    supersedes_rule_id: integer('supersedes_rule_id'),
+    source_prompt_id: integer('source_prompt_id').references(() => prompts.id),
+    supersedes_rule_id: integer('supersedes_rule_id').references(
+      (): AnySQLiteColumn => memoryRules.id
+    ),
     created_at: text('created_at').notNull(),
     updated_at: text('updated_at').notNull(),
   },
@@ -76,8 +90,12 @@ export const memoryRules = sqliteTable(
 export const ruleEvidence = sqliteTable(
   'rule_evidence',
   {
-    rule_id: integer('rule_id').notNull(),
-    prompt_id: integer('prompt_id').notNull(),
+    rule_id: integer('rule_id')
+      .notNull()
+      .references(() => memoryRules.id),
+    prompt_id: integer('prompt_id')
+      .notNull()
+      .references(() => prompts.id),
     action: text('action').notNull(),
     ts: text('ts').notNull(),
   },
