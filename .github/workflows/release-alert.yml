@@ -1,9 +1,9 @@
 name: Release alert
 
 # Posts (and keeps updated) a PR comment whenever merging the PR would publish a
-# package version or create a GitHub Release. This mirrors publish.yml: npmjs.org
-# is gated by the v<version> tag, while GitHub Packages and GitHub Releases are
-# checked directly so existing npm releases can be backfilled there.
+# package version or create a GitHub Release. This mirrors publish.yml: npmjs.org,
+# GitHub Packages, and GitHub Releases are checked directly so existing versions
+# can be backfilled under a renamed package.
 #
 # The comment is "sticky": a hidden marker lets us update the same comment on
 # every push instead of spamming new ones, and we flip it to a no-release note
@@ -51,14 +51,27 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "scope=${scope}" >> "$GITHUB_OUTPUT"
 
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists — merging will not publish to npmjs.org."
+          if npm_view_output="$(npm view "${name}@${version}" version --registry=https://registry.npmjs.org 2>&1)"; then
+            echo "npmjs.org already has ${name}@${version}."
             npm_publish=false
-          else
-            echo "Tag ${tag} not found — merging will publish to npmjs.org."
+          elif [[ "${npm_view_output}" == *"E404"* || "${npm_view_output}" == *"404 Not Found"* ]]; then
+            echo "npmjs.org is missing ${name}@${version} — merging will publish it."
             npm_publish=true
+          else
+            echo "::error::Could not determine whether npmjs.org has ${name}@${version}."
+            printf '%s\n' "${npm_view_output}"
+            exit 1
           fi
           echo "npm_publish=${npm_publish}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists."
+            tag_exists=true
+          else
+            echo "Tag ${tag} not found — publish.yml will tag after package registries are satisfied."
+            tag_exists=false
+          fi
+          echo "tag_exists=${tag_exists}" >> "$GITHUB_OUTPUT"
 
           npmrc="${RUNNER_TEMP}/github-packages.npmrc"
           {
@@ -103,12 +116,16 @@ jobs:
         with:
           script: |
             const marker = '<!-- release-alert -->';
-            const { will_publish, npm_publish, github_publish, github_release, version, name, tag } = process.env;
+            const { will_publish, npm_publish, github_publish, github_release, tag_exists, version, name, tag } = process.env;
             const willPublish = will_publish === 'true';
+            const tagExists = tag_exists === 'true';
             const packageTargets = [
               npm_publish === 'true' ? 'npmjs.org' : null,
               github_publish === 'true' ? 'GitHub Packages' : null,
             ].filter(Boolean).join(' and ');
+            const tagLine = tagExists
+              ? `The \`${tag}\` tag already exists, so the workflow will not create a new tag.`
+              : `The workflow will push the \`${tag}\` tag after package registries are satisfied.`;
             const publishLines = [
               ...(packageTargets
                 ? [
@@ -126,23 +143,19 @@ jobs:
                   marker,
                   '## 🚀 Merging this PR will publish package artifacts',
                   '',
-                  `This PR sets the version to **\`${version}\`**.`,
+                  `This PR sets the package to **\`${name}@${version}\`**.`,
                   ...publishLines,
-                  npm_publish === 'true'
-                    ? `The workflow will push the \`${tag}\` tag after the publish succeeds.`
-                    : `The \`${tag}\` tag already exists, so this only backfills missing artifacts.`,
+                  tagLine,
                   '',
-                  npm_publish === 'true'
-                    ? 'If that is not intended, revert the version bump in `package.json` before merging.'
-                    : 'If that is not intended, do not merge this artifact backfill change.',
+                  'If that is not intended, adjust the package name/version before merging.',
                 ].join('\n')
               : [
                   marker,
                   '## 📦 No package publish on merge',
                   '',
-                  `The current version (\`${version}\`) is already tagged (\`${tag}\`), exists in GitHub Packages,`,
-                  'and has a GitHub Release, so merging this PR will **not** publish release artifacts. Bump the version in',
-                  '`package.json` (`npm version patch --no-git-tag-version`) to ship a user-facing change.',
+                  `The current package (\`${name}@${version}\`) already exists in npmjs.org and GitHub Packages,`,
+                  `and the \`${tag}\` GitHub Release exists, so merging this PR will **not** publish release artifacts.`,
+                  'Bump the version in `package.json` (`npm version patch --no-git-tag-version`) to ship a new package release.',
                 ].join('\n');
 
             const { owner, repo } = context.repo;
@@ -163,6 +176,7 @@ jobs:
           npm_publish: ${{ steps.check.outputs.npm_publish }}
           github_publish: ${{ steps.check.outputs.github_publish }}
           github_release: ${{ steps.check.outputs.github_release }}
+          tag_exists: ${{ steps.check.outputs.tag_exists }}
           version: ${{ steps.check.outputs.version }}
           name: ${{ steps.check.outputs.name }}
           tag: ${{ steps.check.outputs.tag }}
