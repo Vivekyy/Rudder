@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -114,6 +115,21 @@ test('rudderBinPath matches the bin extension to the loading module', async () =
   // that had the original "hook points at a nonexistent file" bug.
   const jsUrl = pathToFileURL(join('/repo', 'dist', 'src', 'install.js')).href;
   assert.equal(rudderBinPath(jsUrl), join('/repo', 'dist', 'bin', 'rudder.js'));
+});
+
+test('CLI help exposes only the supported public commands', () => {
+  const res = spawnSync(process.execPath, [join(process.cwd(), 'bin', 'rudder.ts'), '--help'], {
+    encoding: 'utf8',
+    env: { ...process.env, RUDDER_HOME: home },
+  });
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout, /rudder init/);
+  assert.match(res.stdout, /rudder start/);
+  assert.match(res.stdout, /rudder stats/);
+  assert.match(res.stdout, /rudder rules/);
+  assert.doesNotMatch(res.stdout, /rudder digest/);
+  assert.doesNotMatch(res.stdout, /rudder tag/);
+  assert.doesNotMatch(res.stdout, /rudder hook/);
 });
 
 test('migrationsFolder resolves from source and published layouts', async () => {

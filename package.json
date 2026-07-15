@@ -1,7 +1,7 @@
 {
   "name": "@ruddercode/rudder-core",
   "version": "0.2.1",
-  "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
+  "description": "Record your AI coding prompts (Claude Code + Codex), show live stats, and learn durable rules.",
   "type": "module",
   "bin": {
     "rudder": "dist/bin/rudder.js"
@@ -22,7 +22,6 @@
     "claude-code",
     "codex",
     "prompts",
-    "digest",
     "cli",
     "productivity",
     "developer-tools"

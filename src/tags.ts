@@ -95,7 +95,7 @@ function round(n: number): number {
 }
 
 /**
- * Aggregate a day's prompts into the dashboard/digest stats. Untagged prompts
+ * Aggregate a day's prompts into the dashboard and CLI stats. Untagged prompts
  * count as `ignored` (not yet classified), so they're excluded from the
  * percentages rather than skewing a work category.
  */

@@ -3,9 +3,8 @@
  *
  * This is the single source of truth for how a prompt is categorized and whether
  * it counts as agreeing with / disagreeing with the AI. The tagger (`tagger.ts`)
- * uses it to label each prompt; the digest (`digest.ts`) consumes those stored
- * labels rather than re-deriving them, so the dashboard's numbers and the
- * digest's numbers can never disagree.
+ * uses it to label each prompt, and both the dashboard and `rudder stats` read
+ * those stored labels rather than re-deriving them.
  */
 
 /** The four work categories, plus `ignored` for routine git/VC chores. */

@@ -1,26 +1,21 @@
 import { claudeHook, codexHook } from './hooks.ts';
 import { init } from './install.ts';
-import { digest, type Agent } from './digest.ts';
 import { serve } from './serve.ts';
 import { ensureTagged } from './tagger.ts';
 import { statsForDay, untaggedPromptsForDay, type DayStats } from './tags.ts';
 import { localDay } from './db/index.ts';
 import { ensureCompiled } from './compiler.ts';
 import { allActiveRules } from './rules.ts';
+import { type Agent } from './agent.ts';
 import { capture, captureException, shutdown } from './telemetry.ts';
 
-const HELP = `rudder — record your AI coding prompts and digest your day.
+const HELP = `rudder — record your AI coding prompts and show your stats.
 
 Usage:
   rudder init                 Create the database and install Claude Code + Codex hooks
   rudder start [options]      Open a live dashboard of today's stats (updates as you work)
   rudder stats [options]      Print today's correction rate and category breakdown
-  rudder digest [options]     Summarize a day's work into a Markdown digest
-  rudder tag [options]        Classify untagged prompts and print the day's stats
   rudder rules [options]      Compile pending corrections and list active rules
-  rudder hook claude          (internal) Record a Claude Code prompt from stdin
-  rudder hook codex           (internal) Record a Codex prompt from stdin
-  rudder help                 Show this help
 
 start options:
   --agent claude|codex        Which LLM tags prompts (default: claude, else codex)
@@ -30,15 +25,6 @@ stats options:
   --date YYYY-MM-DD           Day to report (default: today, local time)
   --agent claude|codex        Which LLM classifies any untagged prompts first
   --no-tag                    Show current tags only; skip classifying (instant)
-
-digest options:
-  --date YYYY-MM-DD           Day to summarize (default: today, local time)
-  --agent claude|codex        Which LLM to summarize with (default: claude, else codex)
-  --out PATH                  Output file (default: ./digest.md)
-
-tag options:
-  --date YYYY-MM-DD           Day to tag (default: today, local time)
-  --agent claude|codex        Which LLM classifies prompts (default: claude, else codex)
 
 rules options:
   --agent claude|codex        Which LLM compiles pending corrections
@@ -172,41 +158,23 @@ export async function main(argv: string[]): Promise<void> {
       return;
     }
 
-    case 'stats':
-    case 'tag': {
+    case 'stats': {
       const flags = parseFlags(rest);
       const agent = parseAgentFlag(flags.agent);
       const day = flags.date || localDay();
       try {
-        // `tag` always classifies; `stats` classifies unless --no-tag.
         const remaining =
-          cmd === 'tag' || flags['no-tag'] !== 'true'
+          flags['no-tag'] !== 'true'
             ? ensureTagged(day, agent)
             : untaggedPromptsForDay(day).length;
         const s = statsForDay(day);
         process.stdout.write(formatStats(day, s, remaining) + '\n');
         capture('stats viewed', {
-          command: cmd,
           day,
           total: s.total,
           counted: s.counted,
           no_tag: flags['no-tag'] === 'true',
         });
-        await shutdown();
-      } catch (err) {
-        captureException(err);
-        await shutdown();
-        console.error(`rudder: ${(err as Error).message}`);
-        process.exit(1);
-      }
-      return;
-    }
-
-    case 'digest': {
-      const flags = parseFlags(rest);
-      const agent = parseAgentFlag(flags.agent);
-      try {
-        digest({ day: flags.date, agent, out: flags.out });
         await shutdown();
       } catch (err) {
         captureException(err);

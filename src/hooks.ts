@@ -50,7 +50,7 @@ function safeParse(str: string): Record<string, unknown> | null {
 
 /** Shared Claude Code/Codex `UserPromptSubmit` capture and context hook. */
 async function promptHook(source: Source): Promise<void> {
-  if (process.env.RUDDER_DISABLE) return; // skip our own `rudder digest` agent call
+  if (process.env.RUDDER_DISABLE) return; // skip rudder's own agent calls
   const raw = await readStdin();
   const payload = safeParse(raw) ?? {};
   const cwd =

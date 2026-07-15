@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-/** The LLM CLI rudder shells out to for digests and tagging. */
+/** The LLM CLI rudder shells out to for tagging and rule compilation. */
 export type Agent = 'claude' | 'codex';
 
 /** Run `instruction` through the given agent's CLI and return its stdout. */
