@@ -1,5 +1,5 @@
 {
-  "name": "@vivekyy/rudder",
+  "name": "@ruddercode/rudder-core",
   "version": "0.2.1",
   "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
   "type": "module",

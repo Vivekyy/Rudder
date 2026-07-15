@@ -1,6 +1,6 @@
 name: Publish packages and releases
 
-# Publishes @vivekyy/rudder to npmjs.org and GitHub Packages, then creates the
+# Publishes @ruddercode/rudder-core to npmjs.org and GitHub Packages, then creates the
 # GitHub Release, automatically on merge to main — no manual tagging step. On
 # every push to main this single job:
 #

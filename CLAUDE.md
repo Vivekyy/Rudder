@@ -5,6 +5,8 @@ Quick reference:
 
 - Run `/check` (or `npm run typecheck`, `npm test`, `npm run build`) before committing.
 - Branch off `main`; never commit directly to `main`.
+- The npm package name is `@ruddercode/rudder-core`; use that scope in install,
+  publish, and release-verification instructions.
 - Bump the version in the same PR as a user-facing change
   (`npm version patch --no-git-tag-version`).
 - After opening a PR, use `/address-pr-comments` to triage review feedback.
