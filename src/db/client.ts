@@ -36,11 +36,10 @@ export function migrationsFolder(moduleUrl = import.meta.url): string {
   return join(packageRoot(moduleUrl), 'drizzle');
 }
 
-function applyMigrations(db: DatabaseSync): void {
+function applyMigrations(db: MigratableDrizzleDb): void {
   const config = { migrationsFolder: migrationsFolder() };
   const migrations = readMigrationFiles(config);
-  const migrator = drizzleNodeSqlite(db, { schema }) as MigratableDrizzleDb;
-  migrator.dialect.migrate(migrations, migrator.session, config);
+  db.dialect.migrate(migrations, db.session, config);
 }
 
 export function openDb(): DatabaseSync {
@@ -48,7 +47,8 @@ export function openDb(): DatabaseSync {
   mkdirSync(rudderHome(), { recursive: true });
   const db = new DatabaseSync(dbPath());
   db.exec('PRAGMA journal_mode = WAL;');
-  applyMigrations(db);
+  _drizzle = drizzleNodeSqlite(db, { schema });
+  applyMigrations(_drizzle as MigratableDrizzleDb);
   _sqlite = db;
   return db;
 }

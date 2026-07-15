@@ -7,11 +7,12 @@ Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 ## Layout
 
 - `src/` — TypeScript sources (run directly via Node's type stripping in dev).
-  - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
- - `hooks.ts` — Claude/Codex `UserPromptSubmit` capture + learned-rule injection.
- - `transcript.ts` — bounded, fail-open reading of Claude/Codex JSONL session tails.
- - `compiler.ts` / `rules.ts` — TRACE-inspired rule compilation, lifecycle,
- storage, retrieval, and prompt context rendering.
+  - `db/` — Drizzle schema/client, generated-migration runner, prompt queries,
+    and the custom `node:sqlite` driver.
+  - `hooks.ts` — Claude/Codex `UserPromptSubmit` capture + learned-rule injection.
+  - `transcript.ts` — bounded, fail-open reading of Claude/Codex JSONL session tails.
+  - `compiler.ts` / `rules.ts` — TRACE-inspired rule compilation, lifecycle,
+    storage, retrieval, and prompt context rendering.
   - `classify.ts` — the single source of truth for the category/reaction rubric.
   - `tagger.ts` — classifies untagged prompts via the agent CLI (`ensureTagged`/`tagDay`).
   - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
@@ -67,6 +68,7 @@ hot path.
 
 ```
 npm install        # install dev deps (typescript, @types/node, ...)
+npm run db:generate # regenerate drizzle/ migrations after src/db/schema.ts changes
 npm run typecheck   # tsc --noEmit
 npm test            # node --test
 npm run build       # rm -rf dist && tsc -p tsconfig.build.json
@@ -74,6 +76,9 @@ npm run build       # rm -rf dist && tsc -p tsconfig.build.json
 
 Always run `npm run typecheck` and `npm test` before committing. `prepublishOnly`
 runs typecheck + test + build, so a broken tree cannot be published.
+When the Drizzle schema changes, run `npm run db:generate` and commit the
+generated `drizzle/` migration artifacts; runtime DB initialization applies those
+migrations instead of hand-written bootstrap SQL.
 
 ### Gotcha: dev vs. published paths
 
