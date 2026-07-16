@@ -1,6 +1,6 @@
 {
   "name": "@ruddercode/rudder-core",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
   "type": "module",
   "bin": {
@@ -11,6 +11,7 @@
   },
   "files": [
     "dist",
+    "assets",
     "README.md",
     "LICENSE"
   ],
