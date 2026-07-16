@@ -9,25 +9,10 @@ import {
   type PromptRow,
 } from './db/index.ts';
 
-export type RuleKind = 'preference' | 'pitfall' | 'friction';
-export type RuleScope = 'global' | 'project';
+export type MemoryRule = typeof memoryRules.$inferSelect;
+export type RuleKind = MemoryRule['kind'];
+export type RuleScope = MemoryRule['scope'];
 export type RuleAction = 'NEW' | 'NOOP' | 'UPDATE';
-
-export interface MemoryRule {
-  id: number;
-  atomic_id: string;
-  version: number;
-  status: 'active' | 'inactive';
-  kind: RuleKind;
-  scope: RuleScope;
-  project: string | null;
-  rule_text: string;
-  applies_when: string;
-  does_not_apply_when: string;
-  source_prompt_id: number | null;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface TraceEvent extends PromptRow {
   transcript_path: string | null;
