@@ -11,11 +11,11 @@
   <g fill="#fff" shape-rendering="crispEdges">
     <g transform="translate(76 222) scale(13)">
       <use href="#letter-r"/>
-      <use href="#letter-u" x="7"/>
-      <use href="#letter-d" x="14"/>
-      <use href="#letter-d" x="21"/>
-      <use href="#letter-e" x="28"/>
-      <use href="#letter-r" x="35"/>
+      <use href="#letter-u" x="6"/>
+      <use href="#letter-d" x="12"/>
+      <use href="#letter-d" x="18"/>
+      <use href="#letter-e" x="24"/>
+      <use href="#letter-r" x="30"/>
     </g>
 
     <path d="M614 124h72v13h-72z"/>
