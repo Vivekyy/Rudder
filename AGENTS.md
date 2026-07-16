@@ -58,10 +58,9 @@ the prompt, reads a bounded transcript tail for prior-turn evidence, queues a
 `additionalContext`. Compilation never runs in the hook: `rudder start`
 debounces it out-of-band, and `rudder rules` can run it explicitly.
 
-The compiler resolves atomic rules with `NEW`/`NOOP`/`UPDATE`/`SUPERSEDE`.
-`memory_rules` keeps immutable versions and `rule_evidence` preserves
-provenance. Prompt-time retrieval is a local SQLite query; no LLM runs on the
-hot path.
+The compiler resolves atomic rules with `NEW`/`NOOP`/`UPDATE`. `memory_rules`
+keeps immutable versions and `rule_evidence` preserves provenance. Prompt-time
+retrieval is a local SQLite query; no LLM runs on the hot path.
 
 ## Local development
 

@@ -11,13 +11,13 @@ import {
 
 export type RuleKind = 'preference' | 'pitfall' | 'friction';
 export type RuleScope = 'global' | 'project';
-export type RuleAction = 'NEW' | 'NOOP' | 'UPDATE' | 'SUPERSEDE';
+export type RuleAction = 'NEW' | 'NOOP' | 'UPDATE';
 
 export interface MemoryRule {
   id: number;
   atomic_id: string;
   version: number;
-  status: 'active' | 'superseded';
+  status: 'active' | 'inactive';
   kind: RuleKind;
   scope: RuleScope;
   project: string | null;
@@ -25,7 +25,6 @@ export interface MemoryRule {
   applies_when: string;
   does_not_apply_when: string;
   source_prompt_id: number | null;
-  supersedes_rule_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -283,14 +282,13 @@ function applyCandidate(
   if (existing) {
     db
       .update(memoryRules)
-      .set({ status: 'superseded', updated_at: now })
+      .set({ status: 'inactive', updated_at: now })
       .where(eq(memoryRules.id, existing.id))
       .run();
   }
 
-  const atomicId =
-    candidate.action === 'UPDATE' ? existing!.atomic_id : `rule-${event.id}-${index + 1}`;
-  const version = candidate.action === 'UPDATE' ? existing!.version + 1 : 1;
+  const atomicId = existing ? existing.atomic_id : `rule-${event.id}-${index + 1}`;
+  const version = existing ? existing.version + 1 : 1;
   const project = candidate.scope === 'project' ? projectKey : null;
   const inserted = db
     .insert(memoryRules)
@@ -305,7 +303,6 @@ function applyCandidate(
       applies_when: candidate.appliesWhen,
       does_not_apply_when: candidate.doesNotApplyWhen,
       source_prompt_id: event.id,
-      supersedes_rule_id: existing?.id ?? null,
       created_at: now,
       updated_at: now,
     })

@@ -22,7 +22,7 @@ export interface CompilationResult {
   candidates: RuleCandidate[];
 }
 
-const ACTIONS = new Set<RuleAction>(['NEW', 'NOOP', 'UPDATE', 'SUPERSEDE']);
+const ACTIONS = new Set<RuleAction>(['NEW', 'NOOP', 'UPDATE']);
 const KINDS = new Set<RuleKind>(['preference', 'pitfall', 'friction']);
 const SCOPES = new Set<RuleScope>(['global', 'project']);
 
@@ -108,14 +108,13 @@ Decide whether CURRENT USER MESSAGE contains a durable preference, a repeated pi
 For each atomic signal, resolve it against ACTIVE RULES:
 - NEW: no existing rule covers it.
 - NOOP: an active rule already expresses the same behavior.
-- UPDATE: a compatible refinement; keep the existing atomic id.
-- SUPERSEDE: a conflicting conclusion; replace the existing rule with a new atomic rule.
+- UPDATE: refine or replace an existing rule while keeping its atomic id.
 Split a message with multiple independent signals into multiple candidates.
 
 Rules must be concise directives. "applies_when" must be a positive condition. "does_not_apply_when" must state clear exceptions. Use project scope for repository-specific instructions and global only for preferences that clearly span projects.
 
 Return ONLY one JSON object:
-{"signal":boolean,"reason":"brief","candidates":[{"action":"NEW|NOOP|UPDATE|SUPERSEDE","existing_atomic_id":"id or null","kind":"preference|pitfall|friction","scope":"global|project","rule_text":"directive","applies_when":"positive condition","does_not_apply_when":"exceptions"}]}
+{"signal":boolean,"reason":"brief","candidates":[{"action":"NEW|NOOP|UPDATE","existing_atomic_id":"id or null","kind":"preference|pitfall|friction","scope":"global|project","rule_text":"directive","applies_when":"positive condition","does_not_apply_when":"exceptions"}]}
 
 PROJECT: ${event.project ?? '(unknown)'}
 PRIOR TASK:

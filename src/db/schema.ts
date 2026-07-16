@@ -5,7 +5,6 @@ import {
   sqliteTable,
   text,
   uniqueIndex,
-  type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 
 export const prompts = sqliteTable(
@@ -66,7 +65,7 @@ export const memoryRules = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     atomic_id: text('atomic_id').notNull(),
     version: integer('version').notNull(),
-    status: text('status', { enum: ['active', 'superseded'] }).notNull(),
+    status: text('status', { enum: ['active', 'inactive'] }).notNull(),
     kind: text('kind', { enum: ['preference', 'pitfall', 'friction'] }).notNull(),
     scope: text('scope', { enum: ['global', 'project'] }).notNull(),
     project: text('project'),
@@ -74,9 +73,6 @@ export const memoryRules = sqliteTable(
     applies_when: text('applies_when').notNull(),
     does_not_apply_when: text('does_not_apply_when').notNull(),
     source_prompt_id: integer('source_prompt_id').references(() => prompts.id),
-    supersedes_rule_id: integer('supersedes_rule_id').references(
-      (): AnySQLiteColumn => memoryRules.id
-    ),
     created_at: text('created_at').notNull(),
     updated_at: text('updated_at').notNull(),
   },

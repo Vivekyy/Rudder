@@ -130,16 +130,6 @@
       "entityType": "columns"
     },
     {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "supersedes_rule_id",
-      "table": "memory_rules",
-      "entityType": "columns"
-    },
-    {
       "type": "text",
       "notNull": true,
       "autoincrement": false,
@@ -217,21 +207,6 @@
       "onDelete": "NO ACTION",
       "nameExplicit": false,
       "name": "memory_rules_source_prompt_id_prompts_id_fk",
-      "table": "memory_rules",
-      "entityType": "fks"
-    },
-    {
-      "columns": [
-        "supersedes_rule_id"
-      ],
-      "tableTo": "memory_rules",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "name": "memory_rules_supersedes_rule_id_memory_rules_id_fk",
       "table": "memory_rules",
       "entityType": "fks"
     },

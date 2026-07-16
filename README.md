@@ -195,8 +195,8 @@ the next time you run `rudder start` or `rudder stats`.
 
 Compiles queued prompt/session evidence into atomic rules, then lists the active
 rules. Compilation uses the same local `claude` or `codex` CLI and implements
-`NEW`, `NOOP`, `UPDATE`, and `SUPERSEDE` lifecycle decisions. Updates retain
-older versions in SQLite for audit.
+`NEW`, `NOOP`, and `UPDATE` lifecycle decisions. Updates retain older versions
+in SQLite for audit.
 
 | Option | Default | Description |
 | --- | --- | --- |

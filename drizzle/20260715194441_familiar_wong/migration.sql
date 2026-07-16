@@ -10,11 +10,9 @@ CREATE TABLE `memory_rules` (
 	`applies_when` text NOT NULL,
 	`does_not_apply_when` text NOT NULL,
 	`source_prompt_id` integer,
-	`supersedes_rule_id` integer,
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
-	FOREIGN KEY (`source_prompt_id`) REFERENCES `prompts`(`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`supersedes_rule_id`) REFERENCES `memory_rules`(`id`) ON UPDATE no action ON DELETE no action
+	FOREIGN KEY (`source_prompt_id`) REFERENCES `prompts`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `idx_memory_rules_atomic_version` ON `memory_rules` (`atomic_id`,`version`);--> statement-breakpoint

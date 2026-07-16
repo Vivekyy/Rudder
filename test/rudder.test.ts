@@ -501,7 +501,7 @@ test('compilation applies only the last candidate for a repeated existing rule t
     secondEvent,
     [
       {
-        action: 'SUPERSEDE',
+        action: 'UPDATE',
         existingAtomicId: first.atomic_id,
         kind: 'preference',
         scope: 'project',
@@ -510,7 +510,7 @@ test('compilation applies only the last candidate for a repeated existing rule t
         doesNotApplyWhen: 'another tool is explicitly requested',
       },
       {
-        action: 'SUPERSEDE',
+        action: 'UPDATE',
         existingAtomicId: first.atomic_id,
         kind: 'preference',
         scope: 'project',
@@ -526,11 +526,13 @@ test('compilation applies only the last candidate for a repeated existing rule t
 
   assert.equal(rules.length, 1);
   assert.equal(rules[0].rule_text, 'Use pnpm scripts.');
+  assert.equal(rules[0].atomic_id, first.atomic_id);
+  assert.equal(rules[0].version, 2);
   assert.ok(activeRules('/repos/repeated-target').some((rule) => rule.rule_text === 'Use pnpm scripts.'));
-  const superseded = openDb()
+  const inactive = openDb()
     .prepare('SELECT status FROM memory_rules WHERE id = ?')
     .get(first.id) as { status: string };
-  assert.equal(superseded.status, 'superseded');
+  assert.equal(inactive.status, 'inactive');
 });
 
 test('compilation rejects mixed actions for a repeated existing rule target', async () => {
@@ -573,7 +575,7 @@ test('compilation rejects mixed actions for a repeated existing rule target', as
         secondEvent,
         [
           {
-            action: 'SUPERSEDE',
+            action: 'UPDATE',
             existingAtomicId: first.atomic_id,
             kind: 'preference',
             scope: 'project',
