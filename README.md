@@ -12,8 +12,8 @@
   </p>
 </div>
 
-**Rudder records the prompts you give your AI coding assistants, shows live stats,
-and learns durable rules from your corrections.**
+**Rudder records the prompts you give your AI coding assistants and learns
+durable rules from your corrections.**
 
 Rudder is a tool for understanding what you actually do when you code with AI.
 AI coding tools make it easy to generate, edit, review, and ship code quickly,
@@ -37,11 +37,10 @@ rudder init                       # create the database and install the hooks
 ```
 
 Then just use Claude Code and/or Codex as you normally would — every prompt is
-logged automatically. Whenever you want to see what you've been doing:
+logged automatically. Run the daemon to compile corrections as you work:
 
 ```bash
-rudder start      # live dashboard: correction rate + category breakdown, updated as you work
-rudder stats      # the same numbers, printed to the terminal
+rudder start      # compile queued evidence and open the learned-rules dashboard
 rudder rules      # compile pending corrections and list active learned rules
 ```
 
@@ -67,27 +66,28 @@ do?"
 ┌──────────────┐   UserPromptSubmit hook   ┌─────────────────────┐
 │ Claude/Codex │ ◀───────────────────────▶ │ ~/.rudder/rudder.db │
 └──────────────┘   prompt + saved rules    └──────────┬──────────┘
-                                                      │ out-of-band
+                                                      │ out-of-band TRACE
                                                       ▼
-                                              classify prompts and
-                                               compile corrections
+                                          applicability → verification
+                                                   → rule writing
 ```
 
-- **Local only.** Everything lives in `~/.rudder/rudder.db`. Classification and
-  rule compilation use the LLM CLI you already use. Your data stays yours.
+- **Local only.** Everything lives in `~/.rudder/rudder.db`. Rule generation
+  uses the LLM CLI you already use. Your data stays yours.
 - **Non-intrusive.** The hooks are fail-safe — if rudder ever errors, it logs to
   stderr and exits `0` so it never blocks or breaks Claude Code or Codex.
 - **TRACE-inspired memory.** Rudder reads the bounded tail of the local session
-  transcript, detects durable preferences, pitfalls, and workflow friction
-  out-of-band, resolves them as versioned atomic rules, and injects up to 12
-  applicable project/global rules on later turns. No LLM runs in the hook.
+  transcript and runs isolated applicability, enforcement-verification, and
+  rule-writer sub-agents out of band. The writer resolves durable preferences,
+  pitfalls, and workflow friction as versioned atomic rules. Up to 12
+  project/global rules are injected on later turns; no LLM runs in the hook.
 
 ## Requirements
 
 - **Node.js ≥ 23.6**
 - **Claude Code** (`claude`) and/or **Codex** (`codex`) on your `PATH`. You only
   need one of them; rudder records whichever is installed and uses whichever is
-  available to classify prompts and compile learned rules.
+  available to run the learned-rule sub-agents.
 
 ## Install
 
@@ -140,16 +140,15 @@ instead — the `npm link` symlink picks up the new code with no rebuild.
 | Command | Description |
 | --- | --- |
 | `rudder init` | Create the database and install the Claude Code + Codex hooks. |
-| `rudder start [options]` | Open the live dashboard app; updates as you work. |
-| `rudder stats [options]` | Print today's correction rate and category breakdown. |
+| `rudder start [options]` | Run rule compilation and open the learned-rules dashboard. |
 | `rudder rules [options]` | Compile pending corrections and list active learned rules. |
 
 ### `rudder start`
 
 Starts a small local server (on `127.0.0.1`, port `41789` — override with
-`RUDDER_PORT`). While it runs, each new prompt is classified out-of-band by your
-`claude`/`codex` CLI and the dashboard updates live with your correction rate and
-category breakdown for today.
+`RUDDER_PORT`). While it runs, each new prompt queues a TRACE event. Your
+`claude`/`codex` CLI processes those events out of band, and the dashboard
+updates live with active learned rules and the pending prompt count.
 
 The dashboard is a **standalone app** (a PWA):
 
@@ -161,46 +160,21 @@ The dashboard is a **standalone app** (a PWA):
 
 If you'd rather not install anything, open `http://127.0.0.1:41789/` in a browser.
 
-### `rudder stats`
-
-Prints the same correction rate and category breakdown as the dashboard, on the
-command line:
-
-```
-$ rudder stats
-rudder — 2026-06-18
-26 prompts · 3 git chores skipped · 23 counted
-You said no to your AI 12% of the time  (3 of 25 yes/no reactions)
-
-  Architecting   30%  █████░░░░░░░░░░░  7
-  Tuning         17%  ███░░░░░░░░░░░░░  4
-  Bugfixing       9%  █░░░░░░░░░░░░░░░  2
-  Housekeeping   43%  ███████░░░░░░░░░  10
-```
-
-It classifies any not-yet-tagged prompts first (pass `--no-tag` for an instant
-read of only what's already classified, and `--date YYYY-MM-DD` for another day).
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `--agent claude\|codex` | `claude`, else `codex` | Which LLM classifies prompts. |
-| `--no-tag` | off | Show only already-classified prompts; skip the tagging pass. |
-| `--date YYYY-MM-DD` | today (local) | Day to report. |
-
 It's safe to leave running and safe to run twice (a second `rudder start` just
-re-opens the window). If the daemon isn't running, prompts are simply classified
-the next time you run `rudder start` or `rudder stats`.
+re-opens the window). If the daemon isn't running, TRACE events stay queued and
+are compiled the next time you run `rudder start` or `rudder rules`.
 
 ### `rudder rules`
 
 Compiles queued prompt/session evidence into atomic rules, then lists the active
-rules. Compilation uses the same local `claude` or `codex` CLI and implements
-`NEW`, `NOOP`, and `UPDATE` lifecycle decisions. Updates retain older versions
-in SQLite for audit.
+rules. Compilation runs three fresh local `claude` or `codex` child sessions:
+the applicability sub-agent selects relevant active rules, the verifier checks
+whether prior behavior enforced them, and the writer emits `NEW`, `NOOP`, or
+`UPDATE` lifecycle decisions. Updates retain older versions in SQLite for audit.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--agent claude\|codex` | `claude`, else `codex` | Which LLM compiles corrections. |
+| `--agent claude\|codex` | `claude`, else `codex` | Which LLM runs the sub-agents. |
 | `--no-compile` | off | List stored rules without running the compiler. |
 
 When `rudder start` is running, compilation happens automatically after the
@@ -211,15 +185,15 @@ call is made before Claude Code or Codex receives the prompt.
 
 All prompts are stored in plaintext in `~/.rudder/rudder.db` (schema: timestamp,
 local day, source, session id, working directory, project, prompt text, model,
-and the raw hook payload). Companion tables hold prompt tags, queued TRACE
-evidence, versioned learned rules, and rule provenance. Classification and rule
-compilation use the same local `claude`/`codex` CLI — nothing is sent anywhere
-else. To wipe everything, delete `~/.rudder/`. To stop recording, remove the hook
-from `~/.claude/settings.json` and `~/.codex/hooks.json`.
+and the raw hook payload). Companion tables hold queued TRACE evidence, versioned
+learned rules, and rule provenance. Rule sub-agents use the same local
+`claude`/`codex` CLI — nothing is sent anywhere else. To wipe everything, delete
+`~/.rudder/`. To stop recording, remove the hook from
+`~/.claude/settings.json` and `~/.codex/hooks.json`.
 
 Set `RUDDER_HOME` to override the storage location (used by the test suite). The
 hooks honor `RUDDER_DISABLE` — rudder sets it on internal agent calls, so
-classification and compilation prompts are never recorded.
+sub-agent prompts are never recorded.
 
 ## Uninstall
 

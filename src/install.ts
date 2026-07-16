@@ -121,7 +121,7 @@ export function init(): void {
   console.log(`rudder: codex hook   ${codexResult}`);
   console.log('rudder: Codex users must review and trust the new hook in an interactive session.');
   console.log('\nDone. New prompts in Claude Code and Codex will now be recorded.');
-  console.log('Run `rudder start` to open your live stats dashboard.');
+  console.log('Run `rudder start` to compile evidence and open your learned-rules dashboard.');
   capture('rudder initialized', {
     claude_hook: claudeResult.startsWith('installed'),
     codex_hook: codexResult.startsWith('installed'),

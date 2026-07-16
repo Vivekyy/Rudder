@@ -3,11 +3,10 @@ import { spawn } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { localDay, rudderPort } from './db/index.ts';
-import { statsForDay } from './tags.ts';
-import { ensureTagged } from './tagger.ts';
+import { rudderPort } from './db/index.ts';
 import { ensureCompiled } from './compiler.ts';
 import { resolveAgent, type Agent } from './agent.ts';
+import { allActiveRules, pendingTraceEvents } from './rules.ts';
 import { PAGE_HTML, INSTALL_HTML, MANIFEST, SERVICE_WORKER } from './ui.ts';
 import { pngIcon } from './icon.ts';
 import { capture, captureException } from './telemetry.ts';
@@ -18,7 +17,7 @@ export interface ServeOptions {
   noOpen?: boolean;
 }
 
-/** How long to wait after the last prompt notification before tagging. */
+/** How long to wait after the last prompt notification before compiling rules. */
 const DEBOUNCE_MS = 1500;
 
 function send(res: http.ServerResponse, status: number, type: string, body: string): void {
@@ -94,21 +93,30 @@ export function serve(opts: ServeOptions = {}): void {
   const port = rudderPort();
   const url = `http://127.0.0.1:${port}/`;
 
-  // Resolve the tagging agent once; tolerate none (dashboard still serves stored stats).
+  // Resolve the compilation agent once; tolerate none (stored rules remain visible).
   let agent: Agent | undefined;
   try {
     agent = resolveAgent(opts.agent);
   } catch {
-    process.stderr.write('rudder: no claude/codex on PATH — serving stored stats without live tagging.\n');
+    process.stderr.write(
+      'rudder: no claude/codex on PATH — serving stored rules without live compilation.\n'
+    );
   }
 
   const clients = new Set<http.ServerResponse>();
   let debounce: NodeJS.Timeout | null = null;
-  let tagging = false;
+  let compiling = false;
   let pending = false;
 
+  function ruleStatus(): object {
+    return {
+      active_rules: allActiveRules(),
+      pending_prompts: pendingTraceEvents().length,
+    };
+  }
+
   function broadcast(): void {
-    const payload = `data: ${JSON.stringify(statsForDay(localDay()))}\n\n`;
+    const payload = `data: ${JSON.stringify(ruleStatus())}\n\n`;
     for (const c of clients) {
       try {
         c.write(payload);
@@ -118,41 +126,38 @@ export function serve(opts: ServeOptions = {}): void {
     }
   }
 
-  // Tag any untagged prompts for today, then push fresh stats to every client.
+  // Compile every queued prompt, then push fresh rule state to every client.
   // Coalesces overlapping runs so a burst of prompts triggers at most one extra.
-  async function tagAndBroadcast(): Promise<void> {
-    if (tagging) {
+  async function compileAndBroadcast(): Promise<void> {
+    if (compiling) {
       pending = true;
       return;
     }
-    tagging = true;
+    compiling = true;
     try {
-      if (agent) {
-        ensureTagged(localDay(), agent);
-        ensureCompiled(agent);
-      }
+      if (agent) ensureCompiled(agent);
     } finally {
-      tagging = false;
+      compiling = false;
       broadcast();
       if (pending) {
         pending = false;
-        void tagAndBroadcast();
+        void compileAndBroadcast();
       }
     }
   }
 
-  function scheduleTagging(): void {
+  function scheduleCompilation(): void {
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => {
       debounce = null;
-      void tagAndBroadcast();
+      void compileAndBroadcast();
     }, DEBOUNCE_MS);
   }
 
   // Routes:
-  //   POST /notify              ping from the capture hook → schedule a tag pass
-  //   GET  /api/stats[?day=]    the day's stats as JSON
-  //   GET  /events              Server-Sent Events stream of stats (live updates)
+  //   POST /notify                ping from the capture hook → schedule compilation
+  //   GET  /api/rules             active rules and pending prompt count as JSON
+  //   GET  /events                Server-Sent Events stream of rule state
   //   GET  /manifest.webmanifest  PWA manifest
   //   GET  /sw.js               pass-through service worker (PWA installability)
   //   GET  /icon-192|512.png    generated app icons
@@ -162,14 +167,13 @@ export function serve(opts: ServeOptions = {}): void {
     const { pathname } = new URL(req.url || '/', url);
 
     if (req.method === 'POST' && pathname === '/notify') {
-      scheduleTagging();
+      scheduleCompilation();
       send(res, 204, 'text/plain', '');
       return;
     }
 
-    if (pathname === '/api/stats') {
-      const day = new URL(req.url || '/', url).searchParams.get('day') || localDay();
-      send(res, 200, 'application/json', JSON.stringify(statsForDay(day)));
+    if (pathname === '/api/rules') {
+      send(res, 200, 'application/json', JSON.stringify(ruleStatus()));
       return;
     }
 
@@ -179,7 +183,7 @@ export function serve(opts: ServeOptions = {}): void {
         'cache-control': 'no-cache',
         connection: 'keep-alive',
       });
-      res.write(`data: ${JSON.stringify(statsForDay(localDay()))}\n\n`);
+      res.write(`data: ${JSON.stringify(ruleStatus())}\n\n`);
       clients.add(res);
       req.on('close', () => clients.delete(res));
       return;
@@ -232,10 +236,10 @@ export function serve(opts: ServeOptions = {}): void {
       no_open: opts.noOpen === true,
       platform: process.platform,
     });
-    // Open first, then backfill. The tag pass is synchronous (spawnSync) and
+    // Open first, then backfill. Compilation is synchronous (spawnSync) and
     // briefly blocks the event loop, so we defer it a beat to let the freshly
-    // opened page load its assets before the daemon goes busy classifying.
+    // opened page load its assets before the daemon runs the sub-agent pipeline.
     if (!opts.noOpen) openDashboard(url);
-    setTimeout(() => void tagAndBroadcast(), 1500);
+    setTimeout(() => void compileAndBroadcast(), 1500);
   });
 }

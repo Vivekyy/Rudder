@@ -33,13 +33,13 @@ test('openDb applies generated Drizzle migrations idempotently', async () => {
   for (const table of [
     '__drizzle_migrations',
     'memory_rules',
-    'prompt_tags',
     'prompts',
     'rule_evidence',
     'trace_events',
   ]) {
     assert.ok(tables.has(table), `expected ${table} to be created`);
   }
+  assert.ok(!tables.has('prompt_tags'), 'prompt classification storage should be removed');
 
   const indexes = new Set(
     (
@@ -62,7 +62,7 @@ test('openDb applies generated Drizzle migrations idempotently', async () => {
   const migrations = db
     .prepare('SELECT hash, created_at FROM __drizzle_migrations')
     .all() as { hash: string; created_at: number }[];
-  assert.equal(migrations.length, 1);
+  assert.equal(migrations.length, 2);
   assert.ok(migrations[0].hash);
   assert.ok(migrations[0].created_at > 0);
 });
@@ -125,9 +125,9 @@ test('CLI help exposes only the supported public commands', () => {
   assert.equal(res.status, 0, res.stderr);
   assert.match(res.stdout, /rudder init/);
   assert.match(res.stdout, /rudder start/);
-  assert.match(res.stdout, /rudder stats/);
   assert.match(res.stdout, /rudder rules/);
   assert.doesNotMatch(res.stdout, /rudder digest/);
+  assert.doesNotMatch(res.stdout, /rudder stats/);
   assert.doesNotMatch(res.stdout, /rudder tag/);
   assert.doesNotMatch(res.stdout, /rudder hook/);
 });
@@ -170,86 +170,6 @@ test('claude hook parses stdin JSON into a row', async () => {
   const found = rows.find((r) => r.prompt === 'Add an index');
   assert.ok(found, 'claude hook should have recorded the prompt');
   assert.equal(found!.project, 'archerdb');
-});
-
-test('statsForDay counts untagged prompts as ignored, then reflects tags', async () => {
-  const { insertPrompt, localDay } = await import('../src/db/index.ts');
-  const { upsertTag, statsForDay, untaggedPromptsForDay } = await import('../src/tags.ts');
-
-  const when = new Date('2020-03-04T12:00:00'); // local noon → stable local day
-  const day = localDay(when);
-  const ids = ['arch', 'tune', 'bug', 'house', 'chore'].map((p) =>
-    insertPrompt({ source: 'claude', prompt: p, ts: when })!
-  );
-
-  // Before tagging: everything is untagged → counted as ignored, not a category.
-  assert.equal(untaggedPromptsForDay(day).length, 5);
-  let s = statsForDay(day);
-  assert.equal(s.total, 5);
-  assert.equal(s.ignored, 5);
-  assert.equal(s.counted, 0);
-  assert.equal(s.byCategory.housekeeping.pct, 0);
-  assert.equal(s.correctionPct, null);
-
-  upsertTag(ids[0], 'architecting', 'none', 'claude');
-  upsertTag(ids[1], 'tuning', 'none', 'claude');
-  upsertTag(ids[2], 'bugfixing', 'disagree', 'claude');
-  upsertTag(ids[3], 'housekeeping', 'agree', 'claude');
-  upsertTag(ids[4], 'ignored', 'none', 'claude');
-
-  assert.equal(untaggedPromptsForDay(day).length, 0);
-  s = statsForDay(day);
-  assert.equal(s.total, 5);
-  assert.equal(s.ignored, 1);
-  assert.equal(s.counted, 4);
-  assert.equal(s.byCategory.architecting.pct, 25);
-  assert.equal(s.byCategory.bugfixing.count, 1);
-  assert.equal(s.agree, 1);
-  assert.equal(s.disagree, 1);
-  assert.equal(s.correctionPct, 50); // 1 disagree of 2 reactions
-
-  // Re-tagging the same prompt replaces, not duplicates.
-  upsertTag(ids[0], 'bugfixing', 'none', 'claude');
-  s = statsForDay(day);
-  assert.equal(s.total, 5, 'upsert must not create a second tag row');
-  assert.equal(s.byCategory.architecting.count, 0);
-  assert.equal(s.byCategory.bugfixing.count, 2);
-});
-
-test('untaggedPromptsForDay treats a tag from another version as untagged', async () => {
-  const { insertPrompt, localDay } = await import('../src/db/index.ts');
-  const { upsertTag, untaggedPromptsForDay, TAGGER_VERSION } = await import('../src/tags.ts');
-
-  const when = new Date('2020-05-06T12:00:00');
-  const day = localDay(when);
-  const id = insertPrompt({ source: 'codex', prompt: 'stale tag', ts: when })!;
-
-  upsertTag(id, 'tuning', 'none', 'codex', TAGGER_VERSION - 1); // older version
-  assert.ok(
-    untaggedPromptsForDay(day).some((r) => r.id === id),
-    'a tag at an older version should count as untagged'
-  );
-
-  upsertTag(id, 'tuning', 'none', 'codex', TAGGER_VERSION); // current version
-  assert.ok(!untaggedPromptsForDay(day).some((r) => r.id === id));
-});
-
-test('parseTags tolerates fences/prose and normalizes categories', async () => {
-  const { parseTags } = await import('../src/tagger.ts');
-
-  const out =
-    'Sure, here are the tags:\n```json\n' +
-    '[{"id":1,"category":"Architecting","reaction":"none"},' +
-    '{"id":2,"category":"bogus","reaction":"disagree"},' +
-    '{"id":"x","category":"tuning","reaction":"agree"}]\n```\nDone.';
-  const tags = parseTags(out);
-
-  assert.equal(tags.length, 2, 'non-integer id is dropped');
-  assert.equal(tags[0].category, 'architecting'); // lowercased
-  assert.equal(tags[0].reaction, 'none');
-  assert.equal(tags[1].category, 'ignored'); // unknown → fallback
-  assert.equal(tags[1].reaction, 'disagree');
-  assert.deepEqual(parseTags('no array here'), []);
 });
 
 test('telemetryDisabled honors DO_NOT_TRACK=1 opt-out', async () => {
@@ -423,6 +343,111 @@ test('compiler parser rejects malformed lifecycle output', async () => {
     reason: 'ordinary task',
     candidates: [],
   });
+});
+
+test('compiler delegates applicability, verification, and writing to isolated roles', async () => {
+  const { insertPrompt, openDb } = await import('../src/db/index.ts');
+  const {
+    queueTraceEvent,
+    pendingTraceEvents,
+    applyRuleCandidate,
+    markTraceEvent,
+  } = await import('../src/rules.ts');
+  const { compileEvent, parseApplicability } = await import('../src/compiler.ts');
+
+  const seedId = insertPrompt({
+    source: 'claude',
+    prompt: 'Always preserve the public API',
+    cwd: '/repos/subagent-pipeline',
+    project: 'subagent-pipeline',
+  })!;
+  queueTraceEvent(seedId, null, 'change the API', 'renamed an endpoint');
+  const seedEvent = pendingTraceEvents().find((row) => row.id === seedId)!;
+  const rule = applyRuleCandidate(
+    seedEvent,
+    {
+      action: 'NEW',
+      existingAtomicId: null,
+      kind: 'pitfall',
+      scope: 'project',
+      ruleText: 'Preserve the public API.',
+      appliesWhen: 'changing public interfaces',
+      doesNotApplyWhen: 'the user explicitly requests a breaking change',
+    },
+    0
+  )!;
+  markTraceEvent(seedId, 'skipped', 'claude', 1);
+
+  assert.throws(
+    () =>
+      parseApplicability(
+        '{"applicable_atomic_ids":["unknown-rule"],"reason":"relevant"}',
+        [rule]
+      ),
+    /unknown rule/
+  );
+
+  const promptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Do not rename the endpoint; keep the API stable',
+    cwd: '/repos/subagent-pipeline',
+    project: 'subagent-pipeline',
+  })!;
+  queueTraceEvent(promptId, null, 'refactor the endpoint implementation', 'renamed the endpoint');
+  const event = pendingTraceEvents().find((row) => row.id === promptId)!;
+  const roles: string[] = [];
+  const runner = (
+    _agent: 'claude' | 'codex',
+    role: 'applicability' | 'writer' | 'verifier',
+    instruction: string
+  ): string => {
+    roles.push(role);
+    if (role === 'applicability') {
+      assert.match(instruction, /Preserve the public API/);
+      return JSON.stringify({
+        applicable_atomic_ids: [rule.atomic_id],
+        reason: 'the task changes a public interface',
+      });
+    }
+    if (role === 'verifier') {
+      assert.match(instruction, new RegExp(rule.atomic_id));
+      return JSON.stringify({
+        enforced: false,
+        reason: 'the endpoint was renamed',
+        verdicts: [
+          {
+            atomic_id: rule.atomic_id,
+            compliant: false,
+            reason: 'assistant renamed the endpoint',
+          },
+        ],
+      });
+    }
+    assert.match(instruction, /"enforced":false/);
+    return JSON.stringify({
+      signal: true,
+      reason: 'the user reinforced an existing rule',
+      candidates: [
+        {
+          action: 'NOOP',
+          existing_atomic_id: rule.atomic_id,
+          kind: 'pitfall',
+          scope: 'project',
+          rule_text: rule.rule_text,
+          applies_when: rule.applies_when,
+          does_not_apply_when: rule.does_not_apply_when,
+        },
+      ],
+    });
+  };
+
+  const result = compileEvent(event, 'claude', runner);
+  assert.deepEqual(roles, ['applicability', 'verifier', 'writer']);
+  assert.equal(result.candidates[0].action, 'NOOP');
+  const trace = openDb()
+    .prepare('SELECT status FROM trace_events WHERE prompt_id = ?')
+    .get(promptId) as { status: string };
+  assert.equal(trace.status, 'compiled');
 });
 
 test('compilation rolls back all candidates when one lifecycle action fails', async () => {

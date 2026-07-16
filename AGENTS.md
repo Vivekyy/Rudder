@@ -1,9 +1,8 @@
 # Working in this repo
 
-Rudder records the prompts you give your AI coding assistants, shows live stats,
-and learns durable rules from your corrections. It installs hooks into Claude
-Code and Codex that log each prompt to a local SQLite DB at
-`~/.rudder/rudder.db`.
+Rudder records the prompts you give your AI coding assistants and learns durable
+rules from your corrections. It installs hooks into Claude Code and Codex that
+log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 
 ## Layout
 
@@ -14,11 +13,9 @@ Code and Codex that log each prompt to a local SQLite DB at
   - `transcript.ts` — bounded, fail-open reading of Claude/Codex JSONL session tails.
   - `compiler.ts` / `rules.ts` — TRACE-inspired rule compilation, lifecycle,
     storage, retrieval, and prompt context rendering.
-  - `classify.ts` — the single source of truth for the category/reaction rubric.
-  - `tagger.ts` — classifies untagged prompts via the agent CLI (`ensureTagged`/`tagDay`).
-  - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard and CLI read).
-  - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
-  - `serve.ts` / `ui.ts` — the `rudder start` daemon and its inlined dashboard page
+  - `agent.ts` — shared role-specific `runSubagent`/`resolveAgent` shell-out to
+    `claude`/`codex`.
+  - `serve.ts` / `ui.ts` — the `rudder start` compilation daemon and learned-rules dashboard
     (also a PWA: `ui.ts` exports the manifest + service worker, served by `serve.ts`).
   - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
   - `install.ts` — `rudder init` (DB + hook wiring).
@@ -26,29 +23,6 @@ Code and Codex that log each prompt to a local SQLite DB at
 - `dist/` — compiled output, the only code that ships (see `files` in `package.json`).
   Dev runs `bin/rudder.ts`; the published package runs `dist/bin/rudder.js`.
 - `test/` — `node --test` suites.
-
-## Stats pipeline
-
-Per-prompt classification is the single source of the numbers, so the live
-dashboard and `rudder stats` can never disagree:
-
-- Each prompt is tagged exactly once (`prompt_tags`, keyed by `prompt_id`) with a
-  `category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
-  (agree/disagree/none), using the shared rubric in `classify.ts`.
-- Tagging is **out-of-band**, never in the capture hook: the hook inserts the
-  prompt and fires a best-effort `POST /notify` at the `rudder start` daemon,
-  which debounces (~1.5s) and batches a single agent call. If the daemon is down,
-  the prompt is just left untagged and backfilled by the next `rudder start` or
-  `rudder stats`.
-- `statsForDay()` aggregates tags into percentages (untagged rows count as
-  `ignored` and are excluded from the denominator, so the four percentages sum
-  to ~100% of counted prompts). `rudder stats` calls `ensureTagged` unless
-  `--no-tag` is passed.
-- `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
-  older version count as untagged and get reclassified). Bump it whenever the
-  rubric or prompt rendering changes in a way that should re-tag history.
-- The tagger inherits `RUDDER_DISABLE=1` via `runAgent`, so classifying a prompt
-  never records the classification instruction as a new prompt.
 
 ## Learned-rules pipeline
 
@@ -61,6 +35,19 @@ debounces it out-of-band, and `rudder rules` can run it explicitly.
 The compiler resolves atomic rules with `NEW`/`NOOP`/`UPDATE`. `memory_rules`
 keeps immutable versions and `rule_evidence` preserves provenance. Prompt-time
 retrieval is a local SQLite query; no LLM runs on the hot path.
+
+Each queued TRACE event is processed by three isolated CLI sub-agent roles:
+
+- the applicability sub-agent selects relevant active project/global rules;
+- the verifier sub-agent checks whether the prior assistant behavior enforced
+  every selected rule;
+- the writer sub-agent turns durable corrections into `NEW`/`NOOP`/`UPDATE`
+  candidates using the selected rules and verification result.
+
+`agent.ts` starts a fresh Claude or Codex child process for every role and sets
+`RUDDER_DISABLE=1`/`RUDDER_CHILD_SESSION=1`, so internal prompts never re-enter
+the capture hook. `rudder start` debounces notifications and drains queued TRACE
+events; `rudder rules` can run compilation explicitly.
 
 ## Local development
 

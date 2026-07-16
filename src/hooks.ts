@@ -5,12 +5,12 @@ import { readTranscriptContext } from './transcript.ts';
 import { capture } from './telemetry.ts';
 
 /**
- * Best-effort ping to the `rudder start` dashboard so it tags the new prompt and
- * refreshes live. Fire-and-forget: if the daemon isn't running the connection is
- * refused instantly, and we never let it slow or break the hook.
+ * Best-effort ping to the `rudder start` daemon so it compiles queued rule
+ * evidence and refreshes the rules dashboard. Fire-and-forget: if the daemon
+ * isn't running the connection is refused instantly.
  */
-async function notifyDashboard(): Promise<void> {
-  if (process.env.RUDDER_DISABLE) return;
+async function notifyDaemon(): Promise<void> {
+  if (process.env.RUDDER_DISABLE || process.env.RUDDER_CHILD_SESSION) return;
   try {
     await fetch(`http://127.0.0.1:${rudderPort()}/notify`, {
       method: 'POST',
@@ -50,7 +50,7 @@ function safeParse(str: string): Record<string, unknown> | null {
 
 /** Shared Claude Code/Codex `UserPromptSubmit` capture and context hook. */
 async function promptHook(source: Source): Promise<void> {
-  if (process.env.RUDDER_DISABLE) return; // skip rudder's own agent calls
+  if (process.env.RUDDER_DISABLE || process.env.RUDDER_CHILD_SESSION) return;
   const raw = await readStdin();
   const payload = safeParse(raw) ?? {};
   const cwd =
@@ -78,7 +78,7 @@ async function promptHook(source: Source): Promise<void> {
       transcript.lastUserText,
       transcript.lastAssistantText
     );
-    await notifyDashboard();
+    await notifyDaemon();
     capture('prompt recorded', {
       source,
       has_project: project !== null,

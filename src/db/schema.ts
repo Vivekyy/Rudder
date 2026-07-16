@@ -27,17 +27,6 @@ export const prompts = sqliteTable(
   ]
 );
 
-export const promptTags = sqliteTable('prompt_tags', {
-  prompt_id: integer('prompt_id')
-    .primaryKey()
-    .references(() => prompts.id),
-  category: text('category').notNull(),
-  reaction: text('reaction').notNull(),
-  tagger: text('tagger').notNull(),
-  tagger_version: integer('tagger_version').notNull(),
-  ts: text('ts').notNull(),
-});
-
 export const traceEvents = sqliteTable(
   'trace_events',
   {
@@ -100,7 +89,6 @@ export const ruleEvidence = sqliteTable(
 
 export const schema = {
   prompts,
-  promptTags,
   traceEvents,
   memoryRules,
   ruleEvidence,

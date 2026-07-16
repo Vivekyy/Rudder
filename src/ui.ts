@@ -1,8 +1,6 @@
 /**
  * The dashboard page, inlined as a string so `tsc` carries it into `dist/`
- * automatically — no separate asset to copy and no dev-vs-dist path to resolve.
- * It opens an EventSource to `/events` and re-renders the day's stats live as
- * prompts come in and get tagged.
+ * automatically. It streams the active learned-rule set from the local daemon.
  */
 export const PAGE_HTML = `<!doctype html>
 <html lang="en">
@@ -19,8 +17,7 @@ export const PAGE_HTML = `<!doctype html>
 <style>
   :root {
     --bg: #0e1116; --panel: #161b22; --line: #232a33; --text: #e6edf3;
-    --muted: #8b949e; --accent: #58a6ff; --warn: #f0883e; --good: #3fb950;
-    --arch: #58a6ff; --tune: #bc8cff; --bug: #f0883e; --house: #8b949e;
+    --muted: #8b949e; --accent: #58a6ff; --good: #3fb950;
   }
   * { box-sizing: border-box; }
   body {
@@ -28,94 +25,78 @@ export const PAGE_HTML = `<!doctype html>
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 380px; margin: 0 auto; padding: 18px 16px 20px; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 18px 16px 20px; }
   header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
   h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
-  h1 span { color: var(--muted); font-weight: 400; }
   .live { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 rgba(63,185,80,.6); animation: pulse 2s infinite; }
   .dot.off { background: var(--muted); animation: none; }
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(63,185,80,.6);} 70% { box-shadow: 0 0 0 7px rgba(63,185,80,0);} 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0);} }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
-  .correction .big { font-size: 46px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
-  .correction .label { color: var(--muted); margin-top: 8px; }
-  .correction .sub { color: var(--muted); font-size: 12px; margin-top: 10px; }
-  .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 0 0 14px; }
-  .bar-row { margin-bottom: 12px; }
-  .bar-row:last-child { margin-bottom: 0; }
-  .bar-head { display: flex; justify-content: space-between; margin-bottom: 5px; }
-  .bar-head .name { font-weight: 500; }
-  .bar-head .val { color: var(--muted); }
-  .bar-head .val b { color: var(--text); }
-  .track { height: 8px; background: #0e1116; border-radius: 6px; overflow: hidden; }
-  .fill { height: 100%; border-radius: 6px; transition: width .4s ease; }
-  .totals { display: flex; gap: 18px; color: var(--muted); font-size: 12px; }
-  .totals b { color: var(--text); }
+  .summary { color: var(--muted); margin-bottom: 12px; }
+  .summary b { color: var(--text); }
+  .rule { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 15px; margin-bottom: 10px; }
+  .rule-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .rule-id { color: var(--accent); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .rule-meta { color: var(--muted); font-size: 11px; }
+  .rule-text { font-weight: 600; margin-bottom: 8px; }
+  .condition { color: var(--muted); font-size: 12px; }
+  .condition + .condition { margin-top: 3px; }
+  .empty { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); padding: 28px 16px; text-align: center; }
   footer { color: var(--muted); font-size: 11px; text-align: center; margin-top: 20px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>rudder <span id="day"></span></h1>
+    <h1>rudder learned rules</h1>
     <div class="live"><span class="dot" id="dot"></span><span id="livetext">live</span></div>
   </header>
-
-  <div class="card correction">
-    <div class="big" id="correction">—</div>
-    <div class="label" id="correctionLabel">You said no to your AI</div>
-    <div class="sub" id="correctionSub"></div>
-  </div>
-
-  <div class="card">
-    <div class="section-title">Where your prompts went</div>
-    <div id="bars"></div>
-  </div>
-
-  <div class="card totals" id="totals"></div>
-  <footer>Computed locally from your prompts • updates as you work</footer>
+  <div class="summary" id="summary">Loading learned rules…</div>
+  <div id="rules"></div>
+  <footer>Generated locally from your coding sessions • updates as you work</footer>
 </div>
 
 <script>
-  const CATS = [
-    { key: "architecting", name: "Architecting", color: "var(--arch)" },
-    { key: "tuning", name: "Tuning", color: "var(--tune)" },
-    { key: "bugfixing", name: "Bugfixing", color: "var(--bug)" },
-    { key: "housekeeping", name: "Housekeeping", color: "var(--house)" },
-  ];
-
   function render(s) {
-    document.getElementById("day").textContent = s.day || "";
+    const rules = Array.isArray(s.active_rules) ? s.active_rules : [];
+    const pending = Number(s.pending_prompts || 0);
+    document.getElementById("summary").innerHTML =
+      "<b>" + rules.length + "</b> active rule" + (rules.length === 1 ? "" : "s") +
+      " · <b>" + pending + "</b> prompt" + (pending === 1 ? "" : "s") + " pending";
 
-    const corr = document.getElementById("correction");
-    const sub = document.getElementById("correctionSub");
-    if (s.correctionPct === null || s.correctionPct === undefined) {
-      corr.textContent = "—";
-      document.getElementById("correctionLabel").textContent = "You haven't said yes or no yet today";
-      sub.textContent = s.total ? s.total + " prompts so far" : "Waiting for your first prompt…";
-    } else {
-      corr.textContent = s.correctionPct + "%";
-      document.getElementById("correctionLabel").textContent = "of the time, you said no to your AI";
-      sub.textContent = s.disagree + " disagreements of " + (s.agree + s.disagree) + " yes/no reactions";
+    const list = document.getElementById("rules");
+    list.replaceChildren();
+    if (!rules.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = pending ? "Rule evidence is being compiled…" : "No learned rules yet.";
+      list.appendChild(empty);
+      return;
     }
-
-    const bars = document.getElementById("bars");
-    bars.innerHTML = "";
-    for (const c of CATS) {
-      const stat = (s.byCategory && s.byCategory[c.key]) || { pct: 0, count: 0 };
-      const row = document.createElement("div");
-      row.className = "bar-row";
-      row.innerHTML =
-        '<div class="bar-head"><span class="name">' + c.name + '</span>' +
-        '<span class="val"><b>' + stat.pct + '%</b> · ' + stat.count + '</span></div>' +
-        '<div class="track"><div class="fill" style="width:' + stat.pct + '%;background:' + c.color + '"></div></div>';
-      bars.appendChild(row);
+    for (const rule of rules) {
+      const card = document.createElement("div");
+      card.className = "rule";
+      const head = document.createElement("div");
+      head.className = "rule-head";
+      const id = document.createElement("span");
+      id.className = "rule-id";
+      id.textContent = rule.atomic_id + " v" + rule.version;
+      const meta = document.createElement("span");
+      meta.className = "rule-meta";
+      meta.textContent = rule.kind + " · " + rule.scope + (rule.project ? ":" + rule.project : "");
+      head.append(id, meta);
+      const text = document.createElement("div");
+      text.className = "rule-text";
+      text.textContent = rule.rule_text;
+      const when = document.createElement("div");
+      when.className = "condition";
+      when.textContent = "When: " + rule.applies_when;
+      const except = document.createElement("div");
+      except.className = "condition";
+      except.textContent = "Except: " + rule.does_not_apply_when;
+      card.append(head, text, when, except);
+      list.appendChild(card);
     }
-
-    document.getElementById("totals").innerHTML =
-      '<div><b>' + (s.total || 0) + '</b> prompts</div>' +
-      '<div><b>' + (s.counted || 0) + '</b> counted</div>' +
-      '<div><b>' + (s.ignored || 0) + '</b> git chores skipped</div>';
   }
 
   function setLive(on) {
@@ -123,9 +104,6 @@ export const PAGE_HTML = `<!doctype html>
     document.getElementById("livetext").textContent = on ? "live" : "reconnecting…";
   }
 
-  // When running as the installed standalone app, shrink the window to fit the
-  // content once it has rendered. Best-effort: browsers permit resizeTo for app
-  // windows, but ignore it for normal tabs (where the guard already returns).
   let fitted = false;
   function fitWindow() {
     try {
@@ -144,7 +122,6 @@ export const PAGE_HTML = `<!doctype html>
   es.onerror = () => setLive(false);
   es.onopen = () => setLive(true);
 
-  // Register the (pass-through) service worker so the standalone app keeps working.
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 </script>
 </body>
@@ -195,7 +172,7 @@ export const INSTALL_HTML = `<!doctype html>
 <div class="card">
   <img class="logo" src="/icon-192.png" alt="rudder" />
   <h1>Install rudder</h1>
-  <p class="lead">A live dashboard of your AI-coding stats, as a standalone app.</p>
+  <p class="lead">Your learned coding rules, updated as you work.</p>
   <button id="install" disabled>Preparing…</button>
   <div id="status"></div>
   <div class="hint" id="hint">
@@ -257,7 +234,7 @@ export const INSTALL_HTML = `<!doctype html>
 export const MANIFEST = JSON.stringify({
   name: 'rudder',
   short_name: 'rudder',
-  description: 'Your live AI-coding stats',
+  description: 'Learned rules from your AI coding sessions',
   start_url: '/',
   scope: '/',
   display: 'standalone',
@@ -271,8 +248,8 @@ export const MANIFEST = JSON.stringify({
 
 /**
  * Minimal service worker. It registers a fetch handler (so the app qualifies as
- * installable) but never calls respondWith, so requests — including the live SSE
- * stream — pass straight through to the network with no caching or interference.
+ * installable) but never calls respondWith, so requests pass straight through
+ * to the network with no caching or interference.
  */
 export const SERVICE_WORKER = `self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));

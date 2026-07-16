@@ -1,4 +1,9 @@
-import { runAgent, resolveAgent, type Agent } from './agent.ts';
+import {
+  runSubagent,
+  resolveAgent,
+  type Agent,
+  type SubagentRunner,
+} from './agent.ts';
 import {
   activeRules,
   applyCompilation,
@@ -14,12 +19,29 @@ import {
 } from './rules.ts';
 import { capture } from './telemetry.ts';
 
-export const COMPILER_VERSION = 1;
+export const COMPILER_VERSION = 2;
 
 export interface CompilationResult {
   signal: boolean;
   reason: string;
   candidates: RuleCandidate[];
+}
+
+export interface ApplicabilityResult {
+  applicableAtomicIds: string[];
+  reason: string;
+}
+
+export interface EnforcementVerdict {
+  atomicId: string;
+  compliant: boolean;
+  reason: string;
+}
+
+export interface VerificationResult {
+  enforced: boolean;
+  reason: string;
+  verdicts: EnforcementVerdict[];
 }
 
 const ACTIONS = new Set<RuleAction>(['NEW', 'NOOP', 'UPDATE']);
@@ -33,21 +55,97 @@ function requiredString(value: unknown, field: string, max = 2_000): string {
   return value.trim().slice(0, max);
 }
 
-/** Parse and validate the compiler's strict JSON object. Invalid output is never persisted. */
-export function parseCompilation(output: string): CompilationResult {
+function parseObject(output: string, role: string): Record<string, unknown> {
   const start = output.indexOf('{');
   const end = output.lastIndexOf('}');
-  if (start === -1 || end < start) throw new Error('compiler returned no JSON object');
+  if (start === -1 || end < start) throw new Error(`${role} returned no JSON object`);
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(output.slice(start, end + 1));
   } catch {
-    throw new Error('compiler returned invalid JSON');
+    throw new Error(`${role} returned invalid JSON`);
   }
-  if (!parsed || typeof parsed !== 'object') throw new Error('compiler output must be an object');
-  const root = parsed as Record<string, unknown>;
-  if (typeof root.signal !== 'boolean') throw new Error('compiler output has no boolean signal');
+  if (!parsed || typeof parsed !== 'object') throw new Error(`${role} output must be an object`);
+  return parsed as Record<string, unknown>;
+}
+
+/** Parse the applicability sub-agent's selected active-rule ids. */
+export function parseApplicability(
+  output: string,
+  active: readonly MemoryRule[]
+): ApplicabilityResult {
+  const root = parseObject(output, 'applicability sub-agent');
+  if (!Array.isArray(root.applicable_atomic_ids)) {
+    throw new Error('applicability sub-agent output has no applicable_atomic_ids array');
+  }
+  const known = new Set(active.map((rule) => rule.atomic_id));
+  const applicableAtomicIds: string[] = [];
+  for (const value of root.applicable_atomic_ids) {
+    const atomicId = requiredString(value, 'applicable_atomic_id', 200);
+    if (!known.has(atomicId)) {
+      throw new Error(`applicability sub-agent referenced unknown rule '${atomicId}'`);
+    }
+    if (!applicableAtomicIds.includes(atomicId)) applicableAtomicIds.push(atomicId);
+  }
+  return {
+    applicableAtomicIds,
+    reason: typeof root.reason === 'string' ? root.reason.trim().slice(0, 2_000) : '',
+  };
+}
+
+/** Parse the verifier sub-agent's enforcement assessment. */
+export function parseVerification(
+  output: string,
+  applicableAtomicIds: readonly string[]
+): VerificationResult {
+  const root = parseObject(output, 'verifier sub-agent');
+  if (typeof root.enforced !== 'boolean') {
+    throw new Error('verifier sub-agent output has no boolean enforced');
+  }
+  if (!Array.isArray(root.verdicts)) {
+    throw new Error('verifier sub-agent output has no verdicts array');
+  }
+  const applicable = new Set(applicableAtomicIds);
+  const verdicts = root.verdicts.map((item): EnforcementVerdict => {
+    if (!item || typeof item !== 'object') {
+      throw new Error('verifier verdict must be an object');
+    }
+    const verdict = item as Record<string, unknown>;
+    const atomicId = requiredString(verdict.atomic_id, 'atomic_id', 200);
+    if (!applicable.has(atomicId)) {
+      throw new Error(`verifier sub-agent referenced non-applicable rule '${atomicId}'`);
+    }
+    if (typeof verdict.compliant !== 'boolean') {
+      throw new Error(`verifier verdict for '${atomicId}' has no boolean compliant`);
+    }
+    return {
+      atomicId,
+      compliant: verdict.compliant,
+      reason: requiredString(verdict.reason, 'reason'),
+    };
+  });
+  const judged = new Set(verdicts.map((verdict) => verdict.atomicId));
+  if (judged.size !== verdicts.length || judged.size !== applicable.size) {
+    throw new Error('verifier sub-agent must return exactly one verdict per applicable rule');
+  }
+  const enforced = verdicts.every((verdict) => verdict.compliant);
+  if (root.enforced !== enforced) {
+    throw new Error('verifier sub-agent enforced result conflicts with its verdicts');
+  }
+  return {
+    enforced,
+    reason: typeof root.reason === 'string' ? root.reason.trim().slice(0, 2_000) : '',
+    verdicts,
+  };
+}
+
+/** Parse and validate the writer sub-agent's strict JSON object. */
+export function parseCompilation(output: string): CompilationResult {
+  const root = parseObject(output, 'writer sub-agent');
+  if (typeof root.signal !== 'boolean') {
+    throw new Error('writer sub-agent output has no boolean signal');
+  }
   const reason = typeof root.reason === 'string' ? root.reason.trim().slice(0, 2_000) : '';
   if (!root.signal) return { signal: false, reason, candidates: [] };
   if (!Array.isArray(root.candidates) || root.candidates.length === 0) {
@@ -90,8 +188,8 @@ function clipped(text: string | null | undefined, max = 8_000): string {
   return (text ?? '').slice(0, max);
 }
 
-function compilationInstruction(event: TraceEvent, active: MemoryRule[]): string {
-  const existing = active.map((rule) => ({
+function serializedRules(active: readonly MemoryRule[]): object[] {
+  return active.map((rule) => ({
     atomic_id: rule.atomic_id,
     version: rule.version,
     kind: rule.kind,
@@ -101,11 +199,64 @@ function compilationInstruction(event: TraceEvent, active: MemoryRule[]): string
     applies_when: rule.applies_when,
     does_not_apply_when: rule.does_not_apply_when,
   }));
-  return `You compile durable user corrections into atomic rules for an AI coding assistant.
+}
+
+function applicabilityInstruction(event: TraceEvent, active: MemoryRule[]): string {
+  return `Determine which existing learned rules are relevant to this turn's evidence.
+
+A rule is applicable when its positive condition matches the PRIOR TASK, or when the CURRENT USER MESSAGE corrects, confirms, or refines that rule. Respect every rule's exception. Do not write rules and do not judge compliance.
+
+Return ONLY one JSON object:
+{"applicable_atomic_ids":["existing-id"],"reason":"brief"}
+
+PROJECT: ${event.project ?? '(unknown)'}
+PRIOR TASK:
+${clipped(event.task_text)}
+
+PRIOR ASSISTANT BEHAVIOR:
+${clipped(event.behavior_text)}
+
+CURRENT USER MESSAGE:
+${clipped(event.prompt)}
+
+ACTIVE RULES:
+${JSON.stringify(serializedRules(active))}`;
+}
+
+function verificationInstruction(
+  event: TraceEvent,
+  applicable: readonly MemoryRule[]
+): string {
+  return `Verify whether the PRIOR ASSISTANT BEHAVIOR enforced every applicable learned rule.
+
+Judge only the supplied rules. Use the CURRENT USER MESSAGE as evidence when it explicitly identifies a violation, but do not write or update rules. "enforced" is true only when every verdict is compliant; it is true when there are no applicable rules.
+
+Return ONLY one JSON object:
+{"enforced":boolean,"reason":"brief","verdicts":[{"atomic_id":"existing-id","compliant":boolean,"reason":"brief evidence"}]}
+
+PRIOR TASK:
+${clipped(event.task_text)}
+
+PRIOR ASSISTANT BEHAVIOR:
+${clipped(event.behavior_text)}
+
+CURRENT USER MESSAGE:
+${clipped(event.prompt)}
+
+APPLICABLE RULES:
+${JSON.stringify(serializedRules(applicable))}`;
+}
+
+function writerInstruction(
+  event: TraceEvent,
+  applicable: readonly MemoryRule[],
+  verification: VerificationResult
+): string {
+  return `Write durable user corrections as atomic rules for an AI coding assistant.
 
 Decide whether CURRENT USER MESSAGE contains a durable preference, a repeated pitfall/correction, or workflow friction. Ordinary task requests, one-off implementation details, questions, and acknowledgements are not signals.
 
-For each atomic signal, resolve it against ACTIVE RULES:
+For each atomic signal, resolve it against APPLICABLE RULES selected by a separate sub-agent:
 - NEW: no existing rule covers it.
 - NOOP: an active rule already expresses the same behavior.
 - UPDATE: refine or replace an existing rule while keeping its atomic id.
@@ -126,18 +277,37 @@ ${clipped(event.behavior_text)}
 CURRENT USER MESSAGE:
 ${clipped(event.prompt)}
 
-ACTIVE RULES:
-${JSON.stringify(existing)}`;
+APPLICABLE RULES:
+${JSON.stringify(serializedRules(applicable))}
+
+ENFORCEMENT VERIFICATION:
+${JSON.stringify(verification)}`;
 }
 
-export function compileEvent(event: TraceEvent, agent: Agent): CompilationResult {
+export function compileEvent(
+  event: TraceEvent,
+  agent: Agent,
+  run: SubagentRunner = runSubagent
+): CompilationResult {
   const claimToken = claimTraceEvent(event.id, agent, COMPILER_VERSION);
   if (!claimToken) {
     return { signal: false, reason: 'trace event is already claimed or completed', candidates: [] };
   }
   try {
     const active = activeRules(event.cwd ?? event.project);
-    const result = parseCompilation(runAgent(agent, compilationInstruction(event, active)));
+    const applicability = parseApplicability(
+      run(agent, 'applicability', applicabilityInstruction(event, active)),
+      active
+    );
+    const applicableIds = new Set(applicability.applicableAtomicIds);
+    const applicable = active.filter((rule) => applicableIds.has(rule.atomic_id));
+    const verification = parseVerification(
+      run(agent, 'verifier', verificationInstruction(event, applicable)),
+      applicability.applicableAtomicIds
+    );
+    const result = parseCompilation(
+      run(agent, 'writer', writerInstruction(event, applicable, verification))
+    );
     if (!result.signal) {
       markTraceEvent(event.id, 'skipped', agent, COMPILER_VERSION, undefined, claimToken);
       return result;
@@ -146,10 +316,10 @@ export function compileEvent(event: TraceEvent, agent: Agent): CompilationResult
     for (const candidate of result.candidates) {
       if (
         candidate.existingAtomicId &&
-        !expectedVersions.has(candidate.existingAtomicId)
+        !applicableIds.has(candidate.existingAtomicId)
       ) {
         throw new Error(
-          `compiler referenced rule '${candidate.existingAtomicId}' outside the active project scope`
+          `writer sub-agent referenced rule '${candidate.existingAtomicId}' that the applicability sub-agent did not select`
         );
       }
     }
