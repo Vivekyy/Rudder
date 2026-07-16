@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./assets/rudder-banner.svg" alt="Rudder" width="100%" />
 
-  <h1>Rudder</h1>
+  <h1 align="center">Rudder</h1>
 
   <p>
     <a href="https://discord.gg/tmjdmhp4xD"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?logo=discord&logoColor=white"></a>
