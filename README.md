@@ -2,7 +2,7 @@
   <img src="./assets/rudder-banner.svg" alt="Rudder" width="100%" />
 </div>
 
-# Rudder
+# Rudder 🫧
 
 <div align="center">
   <p>
