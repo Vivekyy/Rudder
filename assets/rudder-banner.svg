@@ -1,34 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500" role="img" aria-labelledby="title desc">
   <title id="title">Rudder banner</title>
-  <desc id="desc">A black banner with white Rudder lettering, a stylized rudder, and pixel stars.</desc>
+  <desc id="desc">A black banner with white pixel-art Rudder lettering, a stylized rudder, and stars.</desc>
   <rect width="1024" height="500" fill="#000"/>
-  <defs>
-    <path id="letter-r" d="M0 0h4v1H0zM0 1h1v1H0zM4 1h1v1H4zM0 2h1v1H0zM4 2h1v1H4zM0 3h4v1H0zM0 4h1v1H0zM2 4h1v1H2zM0 5h1v1H0zM3 5h1v1H3zM0 6h1v1H0zM4 6h1v1H4z"/>
-    <path id="letter-u" d="M0 0h1v1H0zM4 0h1v1H4zM0 1h1v1H0zM4 1h1v1H4zM0 2h1v1H0zM4 2h1v1H4zM0 3h1v1H0zM4 3h1v1H4zM0 4h1v1H0zM4 4h1v1H4zM0 5h1v1H0zM4 5h1v1H4zM0 6h5v1H0z"/>
-    <path id="letter-d" d="M0 0h4v1H0zM0 1h1v1H0zM4 1h1v1H4zM0 2h1v1H0zM4 2h1v1H4zM0 3h1v1H0zM4 3h1v1H4zM0 4h1v1H0zM4 4h1v1H4zM0 5h1v1H0zM4 5h1v1H4zM0 6h4v1H0z"/>
-    <path id="letter-e" d="M0 0h5v1H0zM0 1h1v1H0zM0 2h1v1H0zM0 3h4v1H0zM0 4h1v1H0zM0 5h1v1H0zM0 6h5v1H0z"/>
-  </defs>
   <g fill="#fff" shape-rendering="crispEdges">
     <g transform="translate(76 222) scale(13)">
-      <use href="#letter-r"/>
-      <use href="#letter-u" x="6"/>
-      <use href="#letter-d" x="12"/>
-      <use href="#letter-d" x="18"/>
-      <use href="#letter-e" x="24"/>
-      <use href="#letter-r" x="30"/>
+      <path d="M0 0h4v1H0zM0 1h1v1H0zM4 1h1v1H4zM0 2h1v1H0zM4 2h1v1H4zM0 3h4v1H0zM0 4h1v1H0zM2 4h1v1H2zM0 5h1v1H0zM3 5h1v1H3zM0 6h1v1H0zM4 6h1v1H4z"/>
+      <path d="M6 0h1v1H6zM10 0h1v1h-1zM6 1h1v1H6zM10 1h1v1h-1zM6 2h1v1H6zM10 2h1v1h-1zM6 3h1v1H6zM10 3h1v1h-1zM6 4h1v1H6zM10 4h1v1h-1zM6 5h1v1H6zM10 5h1v1h-1zM6 6h5v1H6z"/>
+      <path d="M12 0h4v1h-4zM12 1h1v1h-1zM16 1h1v1h-1zM12 2h1v1h-1zM16 2h1v1h-1zM12 3h1v1h-1zM16 3h1v1h-1zM12 4h1v1h-1zM16 4h1v1h-1zM12 5h1v1h-1zM16 5h1v1h-1zM12 6h4v1h-4z"/>
+      <path d="M18 0h4v1h-4zM18 1h1v1h-1zM22 1h1v1h-1zM18 2h1v1h-1zM22 2h1v1h-1zM18 3h1v1h-1zM22 3h1v1h-1zM18 4h1v1h-1zM22 4h1v1h-1zM18 5h1v1h-1zM22 5h1v1h-1zM18 6h4v1h-4z"/>
+      <path d="M24 0h5v1h-5zM24 1h1v1h-1zM24 2h1v1h-1zM24 3h4v1h-4zM24 4h1v1h-1zM24 5h1v1h-1zM24 6h5v1h-5z"/>
+      <path d="M30 0h4v1h-4zM30 1h1v1h-1zM34 1h1v1h-1zM30 2h1v1h-1zM34 2h1v1h-1zM30 3h4v1h-4zM30 4h1v1h-1zM32 4h1v1h-1zM30 5h1v1h-1zM33 5h1v1h-1zM30 6h1v1h-1zM34 6h1v1h-1z"/>
     </g>
-
-    <path d="M614 124h72v13h-72z"/>
-    <path d="M624 137h51v8h-51z"/>
-    <path d="M639 148h18v133h-10V158h-8z"/>
+    <path d="M614 124h72v13h-72zM624 137h51v8h-51zM639 148h18v133h-10V158h-8z"/>
     <path d="M651 198h28v7h14v9h14v10h11v13h11v17h9v24h7v32h6v41h-6v41h-13v-6h-14v-8h-15v-9h-13v-12h-12v-16h-10v-22h-8v-31h-5v-42h-4z"/>
     <path d="M656 202h20v7h14v9h14v10h11v13h10v18h8v24h7v33h6v34h-5v37h-9v-6h-13v-8h-15v-9h-13v-12h-12v-16h-10v-22h-8v-31h-5z" opacity=".92"/>
-
-    <path d="M832 112h7v8h8v7h-8v8h-7v-8h-8v-7h8z"/>
-    <path d="M903 156h16v8h8v16h-8v8h-16v-8h-8v-16h8zm4 8v16h12v-16z"/>
-    <path d="M849 223h6v7h7v6h-7v7h-6v-7h-7v-6h7z"/>
-    <path d="M944 262h7v7h-7z"/>
-    <path d="M886 312h16v8h8v15h-8v8h-16v-8h-8v-15h8zm4 8v15h12v-15z"/>
-    <path d="M846 383h6v7h7v6h-7v7h-6v-7h-7v-6h7z"/>
+    <path d="M832 112h7v8h8v7h-8v8h-7v-8h-8v-7h8zM903 156h16v8h8v16h-8v8h-16v-8h-8v-16h8zm4 8v16h12v-16zM849 223h6v7h7v6h-7v7h-6v-7h-7v-6h7zM944 262h7v7h-7zM886 312h16v8h8v15h-8v8h-16v-8h-8v-15h8zm4 8v15h12v-15zM846 383h6v7h7v6h-7v7h-6v-7h-7v-6h7z"/>
   </g>
 </svg>
