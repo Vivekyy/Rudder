@@ -103,6 +103,29 @@ test('compiler delegates writing with runtime applicability and verification con
     },
     0
   )!;
+  const now = new Date().toISOString();
+  openDb()
+    .prepare(
+      `INSERT INTO memory_rules (
+        atomic_id, version, status, kind, scope, enforced, project, rule_text,
+        applies_when, does_not_apply_when, source_prompt_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      'inactive-rule',
+      1,
+      'inactive',
+      'preference',
+      'project',
+      0,
+      'subagent-pipeline',
+      'Do not recreate retired CLI flags.',
+      'changing CLI behavior',
+      'the user explicitly asks to restore the flag',
+      seedId,
+      now,
+      now
+    );
   markTraceEvent(seedId, 'skipped', 'claude', 1);
 
   assert.throws(
@@ -156,6 +179,9 @@ test('compiler delegates writing with runtime applicability and verification con
     assert.match(instruction, /"enforced":false/);
     assert.match(instruction, /"kind":"preference\|pitfall"/);
     assert.doesNotMatch(instruction, /preference\|pitfall\|friction/);
+    assert.match(instruction, /INACTIVE RULES/);
+    assert.match(instruction, /Do not recreate retired CLI flags/);
+    assert.match(instruction, /Do not UPDATE or NOOP an inactive rule/);
     return JSON.stringify({
       signal: true,
       reason: 'the user reinforced an existing rule',
