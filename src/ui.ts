@@ -13,7 +13,7 @@ export const PAGE_HTML = `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="rudder" />
 <link rel="apple-touch-icon" href="/icon-192.png" />
-<link rel="icon" href="/icon-192.png" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
 <style>
   :root {
     --bg: #0e1116; --panel: #161b22; --line: #232a33; --text: #e6edf3;
@@ -142,7 +142,7 @@ export const INSTALL_HTML = `<!doctype html>
 <link rel="manifest" href="/manifest.webmanifest" />
 <meta name="theme-color" content="#0e1116" />
 <link rel="apple-touch-icon" href="/icon-192.png" />
-<link rel="icon" href="/icon-192.png" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
 <style>
   :root { --bg:#0e1116; --panel:#161b22; --line:#232a33; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; }
   * { box-sizing: border-box; }
