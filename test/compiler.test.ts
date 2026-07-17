@@ -182,8 +182,11 @@ test('compiler delegates writing with runtime applicability and verification con
     assert.match(instruction, /INACTIVE RULES/);
     assert.match(instruction, /Do not recreate retired CLI flags/);
     assert.match(instruction, /Do not UPDATE or NOOP an inactive rule/);
-    assert.doesNotMatch(instruction, /abort that NEW candidate/);
-    assert.doesNotMatch(instruction, /inactive rule already retired this behavior/);
+    assert.match(
+      instruction,
+      /do not emit a NEW candidate that restates or semantically recreates an inactive rule/
+    );
+    assert.match(instruction, /If every candidate would recreate inactive behavior/);
     return JSON.stringify({
       signal: true,
       reason: 'the user reinforced an existing rule',
