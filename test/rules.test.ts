@@ -87,6 +87,67 @@ test('rule lifecycle stores versions and renders project-aware context', async (
   assert.equal(localDay().length, 10);
 });
 
+test('manual rules validate input and preserve immutable versions', async () => {
+  const {
+    allActiveRules,
+    createManualRule,
+    deleteManualRule,
+    setManualRuleEnforced,
+    updateManualRule,
+  } = await import('../src/rules.ts');
+
+  assert.throws(
+    () =>
+      createManualRule({
+        ruleText: '',
+        appliesWhen: 'working in the dashboard',
+        doesNotApplyWhen: 'rules are learned automatically',
+        enforced: true,
+      }),
+    /ruleText is required/
+  );
+
+  const created = createManualRule({
+    ruleText: '  Review manual rules before enforcing them.  ',
+    appliesWhen: '  editing dashboard rules  ',
+    doesNotApplyWhen: '  using learned rules untouched  ',
+    enforced: false,
+  });
+  assert.equal(created.version, 1);
+  assert.equal(created.rule_text, 'Review manual rules before enforcing them.');
+  assert.equal(created.applies_when, 'editing dashboard rules');
+  assert.equal(created.does_not_apply_when, 'using learned rules untouched');
+  assert.equal(created.enforced, false);
+
+  assert.equal(setManualRuleEnforced(created.id, false).id, created.id);
+  assert.equal(setManualRuleEnforced(created.id, true).enforced, true);
+
+  const updated = updateManualRule(created.id, {
+    ruleText: 'Review manual rules with context.',
+    appliesWhen: 'curating dashboard rules',
+    doesNotApplyWhen: 'the rule is generated automatically',
+    enforced: true,
+  });
+  assert.equal(updated.atomic_id, created.atomic_id);
+  assert.equal(updated.version, 2);
+  assert.equal(updated.rule_text, 'Review manual rules with context.');
+  assert.throws(
+    () =>
+      updateManualRule(created.id, {
+        ruleText: 'Old versions are inactive.',
+        appliesWhen: 'editing dashboard rules',
+        doesNotApplyWhen: 'the active version is selected',
+        enforced: false,
+      }),
+    /active rule not found/
+  );
+
+  deleteManualRule(updated.id);
+  assert.ok(!allActiveRules().some((rule) => rule.atomic_id === created.atomic_id));
+  assert.throws(() => deleteManualRule(updated.id), /active rule not found/);
+  assert.throws(() => setManualRuleEnforced(updated.id, false), /active rule not found/);
+});
+
 test('compilation rolls back all candidates when one lifecycle action fails', async () => {
   const { insertPrompt, openDb } = await import('../src/db/index.ts');
   const { queueTraceEvent, pendingTraceEvents, applyCompilation } = await import('../src/rules.ts');
