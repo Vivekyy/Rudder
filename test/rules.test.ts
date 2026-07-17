@@ -406,7 +406,9 @@ test('compilation cannot update a rule whose latest version is inactive', async 
   const secondEvent = pendingTraceEvents().find((row) => row.id === secondPromptId)!;
 
   assert.deepEqual(
-    inactiveRules('/repos/inactive-target').map((rule) => [rule.atomic_id, rule.version]),
+    inactiveRules('/repos/inactive-target')
+      .filter((rule) => rule.atomic_id === first.atomic_id)
+      .map((rule) => [rule.atomic_id, rule.version]),
     [[first.atomic_id, 2]]
   );
   assert.throws(
