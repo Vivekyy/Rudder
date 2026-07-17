@@ -12,8 +12,8 @@ export const PAGE_HTML = `<!doctype html>
 <meta name="theme-color" content="#0e1116" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="rudder" />
-<link rel="apple-touch-icon" href="/icon-192.png" />
-<link rel="icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon.svg" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
 <style>
   :root {
     --bg: #0e1116; --panel: #161b22; --line: #232a33; --text: #e6edf3;
@@ -141,8 +141,8 @@ export const INSTALL_HTML = `<!doctype html>
 <title>Install rudder</title>
 <link rel="manifest" href="/manifest.webmanifest" />
 <meta name="theme-color" content="#0e1116" />
-<link rel="apple-touch-icon" href="/icon-192.png" />
-<link rel="icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon.svg" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
 <style>
   :root { --bg:#0e1116; --panel:#161b22; --line:#232a33; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; }
   * { box-sizing: border-box; }
@@ -170,7 +170,7 @@ export const INSTALL_HTML = `<!doctype html>
 </head>
 <body>
 <div class="card">
-  <img class="logo" src="/icon-192.png" alt="rudder" />
+  <img class="logo" src="/icon.svg" alt="rudder" />
   <h1>Install rudder</h1>
   <p class="lead">Your learned coding rules, updated as you work.</p>
   <button id="install" disabled>Preparing…</button>
@@ -241,8 +241,7 @@ export const MANIFEST = JSON.stringify({
   background_color: '#0e1116',
   theme_color: '#0e1116',
   icons: [
-    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+    { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
   ],
 });
 

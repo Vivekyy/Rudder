@@ -8,7 +8,7 @@ import { ensureCompiled } from './compiler.ts';
 import { resolveAgent, type Agent } from './agent.ts';
 import { allActiveRules, pendingTraceEvents } from './rules.ts';
 import { PAGE_HTML, INSTALL_HTML, MANIFEST, SERVICE_WORKER } from './ui.ts';
-import { pngIcon } from './icon.ts';
+import { svgIcon } from './icon.ts';
 import { capture, captureException } from './telemetry.ts';
 
 export interface ServeOptions {
@@ -160,7 +160,7 @@ export function serve(opts: ServeOptions = {}): void {
   //   GET  /events                Server-Sent Events stream of rule state
   //   GET  /manifest.webmanifest  PWA manifest
   //   GET  /sw.js               pass-through service worker (PWA installability)
-  //   GET  /icon-192|512.png    generated app icons
+  //   GET  /icon.svg             SVG app icon
   //   GET  /install             installer landing page (opened when not installed)
   //   GET  /                    the dashboard (what the installed app shows)
   const server = http.createServer((req, res) => {
@@ -199,9 +199,9 @@ export function serve(opts: ServeOptions = {}): void {
       return;
     }
 
-    if (pathname === '/icon-192.png' || pathname === '/icon-512.png') {
-      res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'max-age=86400' });
-      res.end(pngIcon(pathname.includes('512') ? 512 : 192));
+    if (pathname === '/icon.svg') {
+      res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'max-age=86400' });
+      res.end(svgIcon());
       return;
     }
 
