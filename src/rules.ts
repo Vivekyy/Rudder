@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
 import { and, asc, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import {
   memoryRules,
@@ -68,6 +69,15 @@ export interface TraceEventLookup {
   turnId?: string | null;
   hookPromptId?: string | null;
   cwd?: string | null;
+}
+
+function normalizeProjectKey(projectKey?: string | null): string | null {
+  if (!projectKey) return null;
+  return basename(projectKey) || projectKey;
+}
+
+function projectKeyForEvent(event: TraceEvent): string | null {
+  return event.project ?? normalizeProjectKey(event.cwd);
 }
 
 export function queueTraceEvent(
@@ -291,10 +301,11 @@ export function markTraceEvent(
 }
 
 export function activeRules(projectKey?: string | null): MemoryRule[] {
-  const projectClause = projectKey
+  const normalizedProject = normalizeProjectKey(projectKey);
+  const projectClause = normalizedProject
     ? or(
         eq(memoryRules.scope, 'global'),
-        and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey))
+        and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, normalizedProject))
       )
     : eq(memoryRules.scope, 'global');
   return rudderDb()
@@ -346,7 +357,7 @@ export function applicableRulesForEvent(event: TraceEvent, limit = 12): MemoryRu
   const applicability = traceApplicability(event);
   const applicableIds = new Set(applicability?.applicableAtomicIds ?? []);
   if (applicableIds.size === 0) return [];
-  return activeRules(event.cwd ?? event.project)
+  return activeRules(projectKeyForEvent(event))
     .filter((rule) => applicableIds.has(rule.atomic_id))
     .slice(0, limit);
 }
@@ -421,10 +432,11 @@ function activeRuleByAtomicId(
   projectKey: string | null,
   db: RuleDb = rudderDb()
 ): MemoryRule | null {
-  const projectClause = projectKey
+  const normalizedProject = normalizeProjectKey(projectKey);
+  const projectClause = normalizedProject
     ? or(
         eq(memoryRules.scope, 'global'),
-        and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, projectKey))
+        and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, normalizedProject))
       )
     : eq(memoryRules.scope, 'global');
   return (
@@ -453,7 +465,7 @@ function applyCandidate(
   index: number,
   expectedVersions?: ReadonlyMap<string, number>
 ): MemoryRule | null {
-  const projectKey = event.cwd ?? event.project;
+  const projectKey = projectKeyForEvent(event);
   const existing = candidate.existingAtomicId
     ? activeRuleByAtomicId(candidate.existingAtomicId, projectKey, db)
     : null;

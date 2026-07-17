@@ -1,6 +1,6 @@
 {
   "name": "@ruddercode/rudder-core",
-  "version": "0.2.2",
+  "version": "0.2.1",
   "description": "Record Claude Code and Codex prompts and learn durable rules from corrections.",
   "type": "module",
   "bin": {

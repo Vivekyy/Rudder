@@ -261,6 +261,8 @@ test('rule lifecycle stores versions and renders project-aware context', async (
     pendingTraceEvents,
     applyRuleCandidate,
     activeRules,
+    applicableRulesForEvent,
+    markTraceApplicability,
     renderRuleContext,
   } = await import('../src/rules.ts');
   const promptId = insertPrompt({
@@ -287,8 +289,20 @@ test('rule lifecycle stores versions and renders project-aware context', async (
     0
   )!;
   assert.equal(first.version, 1);
+  assert.equal(first.project, 'rule-project');
   assert.match(renderRuleContext('/repos/rule-project'), /Use pnpm instead of npm/);
+  assert.match(renderRuleContext('/tmp/worktrees/rule-project'), /Use pnpm instead of npm/);
   assert.doesNotMatch(renderRuleContext('other-project'), /Use pnpm instead of npm/);
+  markTraceApplicability(promptId, [first.atomic_id], 'applies to dependencies', 'claude', 1);
+  const eventWithApplicability = pendingTraceEvents().find((row) => row.id === promptId)!;
+  assert.ok(
+    applicableRulesForEvent({
+      ...eventWithApplicability,
+      cwd: '/tmp/worktrees/rule-project',
+      project: 'rule-project',
+    }).some((rule) => rule.atomic_id === first.atomic_id),
+    'applicable rule lookup should survive checkout/worktree path changes'
+  );
 
   const updated = applyRuleCandidate(
     event,
@@ -304,8 +318,9 @@ test('rule lifecycle stores versions and renders project-aware context', async (
     1
   )!;
   assert.equal(updated.version, 2);
+  assert.equal(updated.project, 'rule-project');
   assert.equal(
-    activeRules('/repos/rule-project').filter((rule) => rule.atomic_id === first.atomic_id).length,
+    activeRules('/tmp/worktrees/rule-project').filter((rule) => rule.atomic_id === first.atomic_id).length,
     1
   );
   assert.equal(localDay().length, 10);

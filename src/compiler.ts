@@ -39,7 +39,7 @@ export function compileEvent(
     return { signal: false, reason: 'trace event is already claimed or completed', candidates: [] };
   }
   try {
-    const active = activeRules(event.cwd ?? event.project);
+    const active = activeRules(event.project ?? event.cwd);
     const applicability = traceApplicability(event);
     const applicableIds = new Set(applicability?.applicableAtomicIds ?? []);
     const applicable = active.filter((rule) => applicableIds.has(rule.atomic_id));
