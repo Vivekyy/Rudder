@@ -16,8 +16,7 @@ export default defineConfig({
     proxy: {
       '/api': rudderTarget,
       '/events': rudderTarget,
-      '/icon-192.png': rudderTarget,
-      '/icon-512.png': rudderTarget,
+      '/icon.svg': rudderTarget,
     },
   },
 });

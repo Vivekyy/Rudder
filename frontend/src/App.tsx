@@ -70,7 +70,7 @@ function InstallPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-5">
       <section className="w-[360px] max-w-[90vw] text-center">
-        <img className="mx-auto h-[84px] w-[84px] rounded-[20px]" src="/icon-192.png" alt="rudder" />
+        <img className="mx-auto h-[84px] w-[84px] rounded-[20px]" src="/icon.svg" alt="rudder" />
         <h1 className="mt-4 text-[22px] font-semibold">Install rudder</h1>
         <p className="mt-1 mb-5 text-[#8b949e]">Your learned coding rules, updated as you work.</p>
         <button

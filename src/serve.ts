@@ -15,7 +15,7 @@ import {
   setManualRuleEnforced,
   updateManualRule,
 } from './rules.ts';
-import { pngIcon } from './icon.ts';
+import { svgIcon } from './icon.ts';
 import { capture, captureException } from './telemetry.ts';
 
 export interface ServeOptions {
@@ -246,8 +246,8 @@ export function serve(opts: ServeOptions = {}): void {
   //   GET  /events                Server-Sent Events stream of rule state
   //   GET  /manifest.webmanifest  PWA manifest from the built frontend
   //   GET  /sw.js                 pass-through service worker (PWA installability)
-  //   GET  /icon-192|512.png    generated app icons
-  //   GET  /*                   built React frontend with app fallback
+  //   GET  /icon.svg             SVG app icon
+  //   GET  /*                    built React frontend with app fallback
   const server = http.createServer(async (req, res) => {
     const { pathname } = new URL(req.url || '/', url);
 
@@ -324,9 +324,9 @@ export function serve(opts: ServeOptions = {}): void {
         return;
       }
 
-      if (pathname === '/icon-192.png' || pathname === '/icon-512.png') {
-        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'max-age=86400' });
-        res.end(pngIcon(pathname.includes('512') ? 512 : 192));
+      if (pathname === '/icon.svg') {
+        res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'max-age=86400' });
+        res.end(svgIcon());
         return;
       }
 
