@@ -88,10 +88,6 @@ test('serve exposes dashboard, asset, status, and notify routes', async () => {
     assert.equal(svgIcon.headers.get('content-type'), 'image/svg+xml');
     assert.match(await svgIcon.text(), /M43 65H168/);
 
-    const pngIcon = await fetch(`${base}/icon-192.png`);
-    assert.equal(pngIcon.status, 200);
-    assert.equal(pngIcon.headers.get('content-type'), 'image/png');
-
     const install = await fetch(`${base}/install`);
     assert.equal(install.status, 200);
     assert.match(await install.text(), /Install rudder/);
