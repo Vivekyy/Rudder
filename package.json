@@ -38,8 +38,10 @@
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
-    "typecheck": "tsc --noEmit",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit && tsc -p frontend/tsconfig.json --noEmit",
+    "frontend:dev": "vite --config frontend/vite.config.ts",
+    "frontend:build": "vite build --config frontend/vite.config.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && npm run frontend:build",
     "test": "node --test test/*.test.ts",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-include='bin/**/*.ts' --test-coverage-lines=70 --test-coverage-branches=70 --test-coverage-functions=70 test/*.test.ts",
     "prepublishOnly": "npm run typecheck && npm run test:coverage && npm run build"
@@ -50,9 +52,21 @@
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
+    "@fortawesome/fontawesome-svg-core": "^7.3.1",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "@fortawesome/react-fontawesome": "^3.4.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@types/shell-quote": "^1.7.5",
+    "@vitejs/plugin-react": "^6.0.3",
     "drizzle-kit": "^1.0.0-rc.4",
-    "typescript": "^5.7.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.7.0",
+    "vite": "^8.1.5"
   }
 }

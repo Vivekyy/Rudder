@@ -48,6 +48,7 @@ test('rule lifecycle stores versions and renders project-aware context', async (
     0
   )!;
   assert.equal(first.version, 1);
+  assert.match(first.atomic_id, /^rule_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(first.project, 'rule-project');
   assert.match(renderRuleContext('/repos/rule-project'), /Use pnpm instead of npm/);
   assert.match(renderRuleContext('/tmp/worktrees/rule-project'), /Use pnpm instead of npm/);
