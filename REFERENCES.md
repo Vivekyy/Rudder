@@ -9,9 +9,6 @@ user feedback into durable runtime guidance.
 - Authors: Yujun Zhou, Kehan Guo, Haomin Zhuang, Xiangqi Wang, Yue Huang,
   Zhenwen Liang, Pin-Yu Chen, Tian Gao, Nuno Moniz, Nitesh V. Chawla, and
   Xiangliang Zhang.
-- Inspiration: This paper's Test-time Rule Acquisition and Compiled Enforcement
-  (Trace) framing motivates Rudder's pipeline for converting user corrections
-  into atomic rules, applicability checks, and Stop-hook enforcement.
 
 ```bibtex
 @article{zhou2026trace,
@@ -30,10 +27,6 @@ user feedback into durable runtime guidance.
 - URL: <https://paper-rho.wenbo.io/>
 - Authors: Wenbo Pan, Shujie Liu, Chin-Yew Lin, Jingying Zeng, Xianfeng Tang,
   Xiangyang Zhou, Yan Lu, and Xiaohua Jia.
-- Inspiration: Retrospective Harness Optimization (RHO) motivates Rudder's use
-  of past agent trajectories as a signal for improving persistent instructions,
-  skills, tools, and workflows without requiring externally labeled validation
-  data.
 
 ```bibtex
 @article{pan2026rho,
