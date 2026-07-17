@@ -328,6 +328,133 @@ export function allActiveRules(): MemoryRule[] {
     .all() as MemoryRule[];
 }
 
+function activeRuleById(id: number, db: RuleDb = rudderDb()): MemoryRule | null {
+  return (
+    (db
+      .select()
+      .from(memoryRules)
+      .where(and(eq(memoryRules.id, id), eq(memoryRules.status, 'active')))
+      .get() as MemoryRule | undefined) ?? null
+  );
+}
+
+function requiredRuleText(value: unknown, field: string, max = 2_000): string {
+  if (typeof value !== 'string') throw new Error(`${field} is required`);
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error(`${field} is required`);
+  return trimmed.slice(0, max);
+}
+
+export interface ManualRuleInput {
+  ruleText: string;
+  appliesWhen: string;
+  doesNotApplyWhen: string;
+  enforced: boolean;
+}
+
+function normalizeManualRuleInput(input: Partial<ManualRuleInput>): ManualRuleInput {
+  return {
+    ruleText: requiredRuleText(input.ruleText, 'ruleText'),
+    appliesWhen: requiredRuleText(input.appliesWhen, 'appliesWhen'),
+    doesNotApplyWhen: requiredRuleText(input.doesNotApplyWhen, 'doesNotApplyWhen'),
+    enforced: input.enforced === true,
+  };
+}
+
+export function createManualRule(input: Partial<ManualRuleInput>): MemoryRule {
+  const rule = normalizeManualRuleInput(input);
+  const now = new Date().toISOString();
+  const inserted = rudderDb()
+    .insert(memoryRules)
+    .values({
+      atomic_id: `rule_${randomUUID()}`,
+      version: 1,
+      status: 'active',
+      kind: 'preference',
+      scope: 'global',
+      enforced: rule.enforced,
+      project: null,
+      rule_text: rule.ruleText,
+      applies_when: rule.appliesWhen,
+      does_not_apply_when: rule.doesNotApplyWhen,
+      source_prompt_id: null,
+      created_at: now,
+      updated_at: now,
+    })
+    .run();
+  return rudderDb()
+    .select()
+    .from(memoryRules)
+    .where(eq(memoryRules.id, Number(inserted.lastInsertRowid)))
+    .get() as MemoryRule;
+}
+
+function replaceActiveRule(
+  db: RuleDb,
+  existing: MemoryRule,
+  input: ManualRuleInput
+): MemoryRule {
+  const now = new Date().toISOString();
+  db.update(memoryRules)
+    .set({ status: 'inactive', updated_at: now })
+    .where(eq(memoryRules.id, existing.id))
+    .run();
+  const inserted = db
+    .insert(memoryRules)
+    .values({
+      atomic_id: existing.atomic_id,
+      version: existing.version + 1,
+      status: 'active',
+      kind: existing.kind,
+      scope: existing.scope,
+      enforced: input.enforced,
+      project: existing.project,
+      rule_text: input.ruleText,
+      applies_when: input.appliesWhen,
+      does_not_apply_when: input.doesNotApplyWhen,
+      source_prompt_id: existing.source_prompt_id,
+      created_at: now,
+      updated_at: now,
+    })
+    .run();
+  return db
+    .select()
+    .from(memoryRules)
+    .where(eq(memoryRules.id, Number(inserted.lastInsertRowid)))
+    .get() as MemoryRule;
+}
+
+export function updateManualRule(id: number, input: Partial<ManualRuleInput>): MemoryRule {
+  return rudderDb().transaction((db) => {
+    const existing = activeRuleById(id, db);
+    if (!existing) throw new Error('active rule not found');
+    return replaceActiveRule(db, existing, normalizeManualRuleInput(input));
+  }, { behavior: 'immediate' });
+}
+
+export function setManualRuleEnforced(id: number, enforced: boolean): MemoryRule {
+  return rudderDb().transaction((db) => {
+    const existing = activeRuleById(id, db);
+    if (!existing) throw new Error('active rule not found');
+    if (existing.enforced === enforced) return existing;
+    db.update(memoryRules)
+      .set({ enforced, updated_at: new Date().toISOString() })
+      .where(eq(memoryRules.id, existing.id))
+      .run();
+    return activeRuleById(existing.id, db)!;
+  }, { behavior: 'immediate' });
+}
+
+export function deleteManualRule(id: number): void {
+  const now = new Date().toISOString();
+  const result = rudderDb()
+    .update(memoryRules)
+    .set({ status: 'inactive', updated_at: now })
+    .where(and(eq(memoryRules.id, id), eq(memoryRules.status, 'active')))
+    .run();
+  if (result.changes === 0) throw new Error('active rule not found');
+}
+
 export function renderRulesContext(
   rules: readonly MemoryRule[],
   omitted = 0
@@ -497,7 +624,7 @@ function applyCandidate(
       .run();
   }
 
-  const atomicId = existing ? existing.atomic_id : `rule-${event.id}-${index + 1}`;
+  const atomicId = existing ? existing.atomic_id : `rule_${randomUUID()}`;
   const version = existing ? existing.version + 1 : 1;
   const project = candidate.scope === 'project' ? projectKey : null;
   const inserted = db
