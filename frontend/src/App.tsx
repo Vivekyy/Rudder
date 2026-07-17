@@ -23,6 +23,15 @@ const initialState: RuleState = {
   pending_rules: [],
 };
 
+function isUnchanged(rule: ActiveRule, input: RuleFormInput): boolean {
+  return (
+    rule.rule_text === input.ruleText.trim() &&
+    rule.applies_when === input.appliesWhen.trim() &&
+    rule.does_not_apply_when === input.doesNotApplyWhen.trim() &&
+    rule.enforced === input.enforced
+  );
+}
+
 function LiveBadge({ live }: { live: boolean }) {
   return (
     <div className="flex items-center gap-1.5 text-[11px] text-[#8b949e]">
@@ -149,6 +158,14 @@ function Dashboard() {
   }, [activeTab, pendingCount, state.active_rules.length]);
 
   async function saveRule(input: RuleFormInput) {
+    // Skip the write entirely when nothing actually changed, so editing without
+    // modifying a rule doesn't spawn a new (identical) version.
+    if (editingRule && isUnchanged(editingRule, input)) {
+      navigate('/active');
+      setRuleModalOpen(false);
+      setEditingRule(null);
+      return;
+    }
     const next = editingRule ? await updateRule(editingRule.id, input) : await createRule(input);
     setState(next);
     navigate('/active');
