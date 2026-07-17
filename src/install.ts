@@ -3,7 +3,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { quote } from 'shell-quote';
-import { openDb, dbPath } from './db.ts';
+import { openDb, dbPath } from './db/index.ts';
 import { capture } from './telemetry.ts';
 
 /**
@@ -50,48 +50,88 @@ function installClaudeHook(): string {
     }
   }
 
-  const argv = rudderArgv(['hook', 'claude']);
-  const command = quote(argv);
+  const promptArgv = rudderArgv(['hook', 'claude', 'prompt']);
+  const stopArgv = rudderArgv(['hook', 'claude', 'stop']);
+  const promptCommand = quote(promptArgv);
+  const stopCommand = quote(stopArgv);
   settings.hooks ??= {};
   settings.hooks.UserPromptSubmit ??= [];
+  settings.hooks.Stop ??= [];
 
-  const already = JSON.stringify(settings.hooks.UserPromptSubmit).includes(argv[1]);
-  if (!already) {
+  const promptAlready = JSON.stringify(settings.hooks.UserPromptSubmit).includes(promptArgv[1]);
+  const stopAlready = JSON.stringify(settings.hooks.Stop).includes(stopArgv[1]);
+  if (!promptAlready) {
     settings.hooks.UserPromptSubmit.push({
-      hooks: [{ type: 'command', command }],
+      hooks: [{ type: 'command', command: promptCommand, timeout: 30 }],
     });
+  }
+  if (!stopAlready) {
+    settings.hooks.Stop.push({
+      hooks: [{ type: 'command', command: stopCommand, timeout: 60 }],
+    });
+  }
+  if (!promptAlready || !stopAlready) {
     backup(settingsPath);
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-    return `installed → ${settingsPath}`;
+    return `installed/updated → ${settingsPath}`;
   }
   return `already present → ${settingsPath}`;
 }
 
-// ---- Codex: top-level `notify` in ~/.codex/config.toml ----------------------
+// ---- Codex: native UserPromptSubmit hook in ~/.codex/hooks.json -------------
 
 function installCodexHook(): string {
+  const codexDir = join(homedir(), '.codex');
+  const hooksPath = join(codexDir, 'hooks.json');
   const configPath = join(homedir(), '.codex', 'config.toml');
-  mkdirSync(dirname(configPath), { recursive: true });
+  mkdirSync(codexDir, { recursive: true });
 
-  const argv = rudderArgv(['hook', 'codex']);
-  // TOML array of strings: ["/abs/node", "/abs/rudder.ts", "hook", "codex"]
-  const notifyLine = `notify = [${argv.map((p) => JSON.stringify(p)).join(', ')}]`;
-
-  let content = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
-
-  if (/^\s*notify\s*=/m.test(content)) {
-    if (content.includes(argv[1])) {
-      return `already present → ${configPath}`;
+  const promptArgv = rudderArgv(['hook', 'codex', 'prompt']);
+  const stopArgv = rudderArgv(['hook', 'codex', 'stop']);
+  const promptCommand = quote(promptArgv);
+  const stopCommand = quote(stopArgv);
+  let hooks: Record<string, any> = {};
+  if (existsSync(hooksPath)) {
+    try {
+      hooks = JSON.parse(readFileSync(hooksPath, 'utf8')) || {};
+    } catch {
+      throw new Error(`Could not parse ${hooksPath} as JSON; fix it and retry.`);
     }
-    backup(configPath);
-    content = content.replace(/^\s*notify\s*=.*$/m, notifyLine);
-  } else {
-    backup(configPath);
-    // Top-level keys must precede any [table]; prepend to stay valid.
-    content = `${notifyLine}\n${content}`;
   }
-  writeFileSync(configPath, content);
-  return `installed → ${configPath}`;
+  hooks.hooks ??= {};
+  hooks.hooks.UserPromptSubmit ??= [];
+  hooks.hooks.Stop ??= [];
+  const promptAlready = JSON.stringify(hooks.hooks.UserPromptSubmit).includes(promptArgv[1]);
+  const stopAlready = JSON.stringify(hooks.hooks.Stop).includes(stopArgv[1]);
+  if (!promptAlready) {
+    hooks.hooks.UserPromptSubmit.push({
+      hooks: [{ type: 'command', command: promptCommand, timeout: 30 }],
+    });
+  }
+  if (!stopAlready) {
+    hooks.hooks.Stop.push({
+      hooks: [{ type: 'command', command: stopCommand, timeout: 60 }],
+    });
+  }
+  if (!promptAlready || !stopAlready) {
+    backup(hooksPath);
+    writeFileSync(hooksPath, JSON.stringify(hooks, null, 2) + '\n');
+  }
+
+  // Remove Rudder's old post-turn `notify` integration. Do not disturb a notify
+  // command owned by another tool.
+  if (existsSync(configPath)) {
+    const content = readFileSync(configPath, 'utf8');
+    const migrated = content
+      .split('\n')
+      .filter((line) => !(/^\s*notify\s*=/.test(line) && /\brudder(?:\.[jt]s)?\b/i.test(line)))
+      .join('\n');
+    if (migrated !== content) {
+      backup(configPath);
+      writeFileSync(configPath, migrated);
+    }
+  }
+  return `${promptAlready && stopAlready ? 'already present' : 'installed/updated'} → ${hooksPath}`;
 }
 
 export function init(): void {
@@ -101,8 +141,9 @@ export function init(): void {
   console.log(`rudder: database ready → ${dbPath()}`);
   console.log(`rudder: claude hook  ${claudeResult}`);
   console.log(`rudder: codex hook   ${codexResult}`);
+  console.log('rudder: Codex users must review and trust the new hook in an interactive session.');
   console.log('\nDone. New prompts in Claude Code and Codex will now be recorded.');
-  console.log('Run `rudder digest` at the end of the day to summarize your work.');
+  console.log('Run `rudder start` to compile evidence and open your learned-rules dashboard.');
   capture('rudder initialized', {
     claude_hook: claudeResult.startsWith('installed'),
     codex_hook: codexResult.startsWith('installed'),

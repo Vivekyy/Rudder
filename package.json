@@ -1,7 +1,7 @@
 {
   "name": "@ruddercode/rudder-core",
   "version": "0.2.1",
-  "description": "Record your AI coding prompts (Claude Code + Codex) and generate a daily digest of what you worked on.",
+  "description": "Record Claude Code and Codex prompts and learn durable rules from corrections.",
   "type": "module",
   "bin": {
     "rudder": "dist/bin/rudder.js"
@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "assets",
+    "drizzle",
     "README.md",
     "LICENSE"
   ],
@@ -21,7 +22,6 @@
     "claude-code",
     "codex",
     "prompts",
-    "digest",
     "cli",
     "productivity",
     "developer-tools"
@@ -37,18 +37,21 @@
     "url": "https://github.com/Vivekyy/Rudder/issues"
   },
   "scripts": {
+    "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "node --test test/*.ts",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
+    "drizzle-orm": "^1.0.0-rc.4",
     "posthog-node": "^5.41.0",
     "shell-quote": "^1.8.1"
   },
   "devDependencies": {
     "@types/node": "^24",
     "@types/shell-quote": "^1.7.5",
+    "drizzle-kit": "^1.0.0-rc.4",
     "typescript": "^5.7.0"
   }
 }

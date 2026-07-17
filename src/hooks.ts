@@ -1,14 +1,35 @@
 import { basename } from 'node:path';
-import { insertPrompt, rudderPort } from './db.ts';
+import { insertPrompt, rudderPort, type Source } from './db/index.ts';
+import {
+  activeRules,
+  applicableRulesForEvent,
+  findTraceEventForHook,
+  markTraceApplicability,
+  queueTraceEvent,
+  recordTraceVerification,
+  renderRulesContext,
+  traceVerificationsForPrompt,
+} from './rules.ts';
+import { APPLICABILITY_VERSION, runApplicability } from './subagents/applicability.ts';
+import {
+  renderVerifierFeedback,
+  runVerification,
+  VERIFIER_VERSION,
+  type VerificationResult,
+} from './subagents/verifier.ts';
+import { readTranscriptContext } from './transcript.ts';
 import { capture } from './telemetry.ts';
 
+const CONTEXT_RULE_LIMIT = 12;
+const MAX_VERIFIER_RETRIES = 3;
+
 /**
- * Best-effort ping to the `rudder start` dashboard so it tags the new prompt and
- * refreshes live. Fire-and-forget: if the daemon isn't running the connection is
- * refused instantly, and we never let it slow or break the hook.
+ * Best-effort ping to the `rudder start` daemon so it compiles queued rule
+ * evidence and refreshes the rules dashboard. Fire-and-forget: if the daemon
+ * isn't running the connection is refused instantly.
  */
-async function notifyDashboard(): Promise<void> {
-  if (process.env.RUDDER_DISABLE) return;
+async function notifyDaemon(): Promise<void> {
+  if (process.env.RUDDER_DISABLE || process.env.RUDDER_CHILD_SESSION) return;
   try {
     await fetch(`http://127.0.0.1:${rudderPort()}/notify`, {
       method: 'POST',
@@ -46,80 +67,192 @@ function safeParse(str: string): Record<string, unknown> | null {
   }
 }
 
-/**
- * Claude Code `UserPromptSubmit` hook. Receives a JSON payload on stdin:
- *   { session_id, transcript_path, cwd, hook_event_name, prompt }
- */
-export async function claudeHook(): Promise<void> {
-  if (process.env.RUDDER_DISABLE) return; // skip our own `rudder digest` agent call
+function payloadString(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function hookLookup(source: Source, payload: Record<string, unknown>) {
+  return {
+    source,
+    sessionId: payloadString(payload, 'session_id'),
+    turnId: payloadString(payload, 'turn_id'),
+    hookPromptId: payloadString(payload, 'prompt_id'),
+    cwd: payloadString(payload, 'cwd') ??
+      (source === 'claude' ? process.env.CLAUDE_PROJECT_DIR : process.env.CODEX_WORKSPACE_ROOT) ??
+      process.cwd(),
+  };
+}
+
+/** Shared Claude Code/Codex `UserPromptSubmit` capture and context hook. */
+async function promptHook(source: Source): Promise<void> {
+  if (process.env.RUDDER_DISABLE || process.env.RUDDER_CHILD_SESSION) return;
   const raw = await readStdin();
   const payload = safeParse(raw) ?? {};
   const cwd =
-    (payload.cwd as string) || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+    (payload.cwd as string) ||
+    (source === 'claude' ? process.env.CLAUDE_PROJECT_DIR : process.env.CODEX_WORKSPACE_ROOT) ||
+    process.cwd();
   const project = projectFromCwd(cwd);
   const model = (payload.model as string) ?? null;
+  const prompt = payload.prompt as string;
   const id = insertPrompt({
-    source: 'claude',
-    prompt: payload.prompt as string,
-    session_id: payload.session_id as string,
+    source,
+    prompt,
+    session_id: payloadString(payload, 'session_id'),
     cwd,
     project,
     model,
     raw,
   });
   if (id !== null) {
-    await notifyDashboard();
+    const transcriptPath = (payload.transcript_path as string) ?? null;
+    const transcript = readTranscriptContext(transcriptPath);
+    queueTraceEvent(
+      id,
+      transcriptPath,
+      transcript.lastUserText,
+      transcript.lastAssistantText,
+      {
+        turnId: payloadString(payload, 'turn_id'),
+        hookPromptId: payloadString(payload, 'prompt_id'),
+      }
+    );
     capture('prompt recorded', {
-      source: 'claude',
+      source,
       has_project: project !== null,
       has_model: model !== null,
+      has_transcript: transcriptPath !== null,
     });
+  }
+  let additionalContext = '';
+  if (id !== null) {
+    const event = findTraceEventForHook({
+      ...hookLookup(source, payload),
+      sessionId: payloadString(payload, 'session_id'),
+    });
+    if (event) {
+      const active = activeRules(cwd);
+      try {
+        if (active.length === 0) {
+          markTraceApplicability(
+            event.id,
+            [],
+            'no active rules for this prompt',
+            source,
+            APPLICABILITY_VERSION
+          );
+        } else {
+          const applicability = runApplicability(source, event, active);
+          markTraceApplicability(
+            event.id,
+            applicability.applicableAtomicIds,
+            applicability.reason,
+            source,
+            APPLICABILITY_VERSION
+          );
+          const applicableIds = new Set(applicability.applicableAtomicIds);
+          const applicable = active
+            .filter((rule) => applicableIds.has(rule.atomic_id))
+            .slice(0, CONTEXT_RULE_LIMIT);
+          additionalContext = renderRulesContext(
+            applicable,
+            Math.max(0, applicability.applicableAtomicIds.length - applicable.length)
+          );
+        }
+      } catch (err) {
+        capture('runtime applicability failed', {
+          source,
+          error: (err as Error).message,
+        });
+      }
+    }
+  }
+  if (id !== null) await notifyDaemon();
+  if (additionalContext) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext,
+        },
+      })
+    );
   }
 }
 
-/**
- * Codex `notify` program. Codex passes a JSON string as the final CLI argument
- * (older builds pipe it on stdin). We care about `agent-turn-complete`, whose
- * `input-messages` array holds the user's prompt(s) for the turn.
- */
-export async function codexHook(argv: string[]): Promise<void> {
-  if (process.env.RUDDER_DISABLE) return; // skip our own `rudder digest` agent call
-  let raw = argv.find((a) => a && a.trim().startsWith('{'));
-  if (!raw) raw = await readStdin();
-  const payload = safeParse(raw ?? '') ?? {};
+/** Shared Claude Code/Codex `Stop` hook verifier. */
+async function stopHook(source: Source): Promise<void> {
+  if (process.env.RUDDER_DISABLE || process.env.RUDDER_CHILD_SESSION) return;
+  const raw = await readStdin();
+  const payload = safeParse(raw) ?? {};
+  const event = findTraceEventForHook(hookLookup(source, payload));
+  if (!event) return;
 
-  const type = payload.type as string | undefined;
-  if (type && type !== 'agent-turn-complete') return; // only record user turns
+  const applicable = applicableRulesForEvent(event, CONTEXT_RULE_LIMIT).filter(
+    (rule) => rule.enforced
+  );
+  if (applicable.length === 0) return;
 
-  const messages =
-    (payload['input-messages'] as unknown) ?? (payload.input_messages as unknown) ?? [];
-  const prompt = Array.isArray(messages)
-    ? messages.join('\n').trim()
-    : String(messages || '');
-  const cwd =
-    (payload.cwd as string) || process.env.CODEX_WORKSPACE_ROOT || null;
+  const attempts = traceVerificationsForPrompt(event.id);
+  const latest = attempts.at(-1);
+  if (latest?.enforced || (latest && !latest.enforced && !latest.blocked)) return;
 
-  const project = projectFromCwd(cwd);
-  const model = (payload.model as string) ?? null;
-  const id = insertPrompt({
-    source: 'codex',
-    prompt,
-    session_id:
-      (payload['turn-id'] as string) ??
-      (payload.turn_id as string) ??
-      (payload.session_id as string) ??
-      null,
-    cwd,
-    project,
-    model,
-    raw,
-  });
-  if (id !== null) {
-    await notifyDashboard();
-    capture('prompt recorded', {
-      source: 'codex',
-      has_project: project !== null,
-      has_model: model !== null,
+  const blockedFailures = attempts.filter((attempt) => !attempt.enforced && attempt.blocked).length;
+  const assistantBehavior =
+    payloadString(payload, 'last_assistant_message') ??
+    readTranscriptContext(payloadString(payload, 'transcript_path')).lastAssistantText;
+  let verification: VerificationResult;
+  try {
+    verification = runVerification(source, event, applicable, assistantBehavior);
+  } catch (err) {
+    capture('runtime verification failed', {
+      source,
+      error: (err as Error).message,
     });
+    return;
   }
+  const shouldBlock = !verification.enforced && blockedFailures < MAX_VERIFIER_RETRIES;
+  const stored = recordTraceVerification(
+    event.id,
+    verification,
+    shouldBlock,
+    source,
+    VERIFIER_VERSION
+  );
+
+  if (shouldBlock) {
+    process.stdout.write(
+      JSON.stringify({
+        decision: 'block',
+        reason: renderVerifierFeedback(verification, stored.attempt, MAX_VERIFIER_RETRIES),
+      })
+    );
+  }
+}
+
+/** Claude Code `UserPromptSubmit` hook. */
+export function claudeHook(): Promise<void> {
+  return promptHook('claude');
+}
+
+/** Codex native `UserPromptSubmit` hook. */
+export function codexHook(): Promise<void> {
+  return promptHook('codex');
+}
+
+export function claudePromptHook(): Promise<void> {
+  return promptHook('claude');
+}
+
+export function codexPromptHook(): Promise<void> {
+  return promptHook('codex');
+}
+
+export function claudeStopHook(): Promise<void> {
+  return stopHook('claude');
+}
+
+export function codexStopHook(): Promise<void> {
+  return stopHook('codex');
 }

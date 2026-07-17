@@ -1,20 +1,23 @@
 # Working in this repo
 
-Rudder records the prompts you give your AI coding assistants and turns a day's
-worth of them into a readable digest. It installs hooks into Claude Code and
-Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
+Rudder records the prompts you give your AI coding assistants and learns durable
+rules from your corrections. It installs hooks into Claude Code and Codex that
+log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 
 ## Layout
 
 - `src/` — TypeScript sources (run directly via Node's type stripping in dev).
-  - `db.ts` — SQLite open/schema (`prompts` + `prompt_tags`), inserts, `rudderPort()`.
-  - `hooks.ts` — Claude/Codex capture hooks; best-effort `/notify` ping to the dashboard.
-  - `classify.ts` — the single source of truth for the category/reaction rubric.
-  - `tagger.ts` — classifies untagged prompts via the agent CLI (`ensureTagged`/`tagDay`).
-  - `tags.ts` — tag queries + `statsForDay()` (the numbers the dashboard *and* digest read).
-  - `agent.ts` — shared `runAgent`/`resolveAgent` shell-out to `claude`/`codex`.
-  - `digest.ts` — renders the Markdown digest; numbers come from `statsForDay`, the LLM only writes prose.
-  - `serve.ts` / `ui.ts` — the `rudder start` daemon and its inlined dashboard page
+  - `db/` — Drizzle schema/client, generated-migration runner, and prompt queries
+    on Drizzle's native `node:sqlite` driver.
+  - `hooks.ts` — Claude/Codex `UserPromptSubmit` capture/applicability injection
+    and `Stop` verification/retry enforcement.
+  - `subagents/` — role-specific applicability, verifier, and writer prompts,
+    parsers, plus the shared CLI runner.
+  - `transcript.ts` — bounded, fail-open reading of Claude/Codex JSONL session tails.
+  - `compiler.ts` / `rules.ts` — TRACE-inspired writer compilation, lifecycle,
+    runtime hook state storage, retrieval, and prompt context rendering.
+  - `agent.ts` — compatibility re-export for `subagents/runner.ts`.
+  - `serve.ts` / `ui.ts` — the `rudder start` compilation daemon and learned-rules dashboard
     (also a PWA: `ui.ts` exports the manifest + service worker, served by `serve.ts`).
   - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
   - `install.ts` — `rudder init` (DB + hook wiring).
@@ -23,34 +26,39 @@ Codex that log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
   Dev runs `bin/rudder.ts`; the published package runs `dist/bin/rudder.js`.
 - `test/` — `node --test` suites.
 
-## Stats pipeline (dashboard + digest)
+## Learned-rules pipeline
 
-Per-prompt classification is the single source of the numbers, so the live
-dashboard and the digest can never disagree:
+Both Claude Code and Codex use native `UserPromptSubmit` and `Stop` hooks. The
+prompt hook records the prompt, reads a bounded transcript tail for prior-turn
+evidence, queues a `trace_events` row, runs the applicability sub-agent over
+active project/global rules, persists the selected rule ids, and injects only
+that selected subset as `additionalContext`.
 
-- Each prompt is tagged exactly once (`prompt_tags`, keyed by `prompt_id`) with a
-  `category` (architecting/tuning/bugfixing/housekeeping/ignored) and a `reaction`
-  (agree/disagree/none), using the shared rubric in `classify.ts`.
-- Tagging is **out-of-band**, never in the capture hook: the hook inserts the
-  prompt and fires a best-effort `POST /notify` at the `rudder start` daemon,
-  which debounces (~1.5s) and batches a single agent call. If the daemon is down,
-  the prompt is just left untagged and backfilled by the next `rudder start`,
-  `rudder tag`, or `rudder digest`.
-- `statsForDay()` aggregates tags into percentages (untagged rows count as
-  `ignored` and are excluded from the denominator, so the four percentages sum
-  to ~100% of counted prompts). `rudder digest` calls
-  `ensureTagged` then fills `{{CORRECTION_LINE}}`/`{{PCT_*}}` tokens with those
-  exact numbers — the LLM is told not to reclassify or recompute.
-- `TAGGER_VERSION` in `tags.ts`: bump it to invalidate existing tags (rows at an
-  older version count as untagged and get reclassified). Bump it whenever the
-  rubric or prompt rendering changes in a way that should re-tag history.
-- The tagger inherits `RUDDER_DISABLE=1` via `runAgent`, so classifying a prompt
-  never records the classification instruction as a new prompt.
+The Stop hook loads the rules selected at prompt time, filters to rules whose
+`enforced` flag is true, and runs the verifier sub-agent against the final
+assistant response (`last_assistant_message` when available). If the verifier
+finds violations, Rudder returns a Stop-hook block/continuation reason so the
+agent keeps working; retries are capped at three persisted verifier attempts.
+
+The compiler resolves atomic rules with `NEW`/`NOOP`/`UPDATE`. `memory_rules`
+keeps immutable versions, an `enforced` flag controls Stop-hook verification,
+and `rule_evidence` preserves provenance.
+
+Out-of-band compilation now runs only the writer sub-agent. `rudder start`
+debounces it after prompt notifications, and `rudder rules` can run it
+explicitly. The writer receives the persisted runtime applicability and verifier
+outputs instead of rerunning those roles speculatively.
+
+`subagents/runner.ts` starts a fresh Claude or Codex child process for every role and sets
+`RUDDER_DISABLE=1`/`RUDDER_CHILD_SESSION=1`, so internal prompts never re-enter
+the capture hook. `rudder start` debounces notifications and drains queued TRACE
+events; `rudder rules` can run compilation explicitly.
 
 ## Local development
 
 ```
 npm install        # install dev deps (typescript, @types/node, ...)
+npm run db:generate # regenerate drizzle/ migrations after src/db/schema.ts changes
 npm run typecheck   # tsc --noEmit
 npm test            # node --test
 npm run build       # rm -rf dist && tsc -p tsconfig.build.json
@@ -58,6 +66,9 @@ npm run build       # rm -rf dist && tsc -p tsconfig.build.json
 
 Always run `npm run typecheck` and `npm test` before committing. `prepublishOnly`
 runs typecheck + test + build, so a broken tree cannot be published.
+When the Drizzle schema changes, run `npm run db:generate` and commit the
+generated `drizzle/` migration artifacts; runtime DB initialization applies those
+migrations instead of hand-written bootstrap SQL.
 
 ### Gotcha: dev vs. published paths
 
@@ -142,9 +153,9 @@ Notes:
 
 ## Installing / re-wiring hooks
 
-`rudder init` creates the DB and installs the Claude Code `UserPromptSubmit` hook
-(`~/.claude/settings.json`) and the Codex `notify` program (`~/.codex/config.toml`).
-Both point at the absolute bin path of the rudder that ran `init`.
+`rudder init` creates the DB and installs native `UserPromptSubmit` hooks for
+Claude Code (`~/.claude/settings.json`) and Codex (`~/.codex/hooks.json`). Both
+point at the absolute bin path of the rudder that ran `init`.
 
 Because each Conductor/git worktree is a separate checkout but `~/.claude/settings.json`
 is global, a hook pointing into a specific worktree breaks once that worktree is

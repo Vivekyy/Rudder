@@ -1,41 +1,30 @@
-import { claudeHook, codexHook } from './hooks.ts';
+import {
+  claudePromptHook,
+  claudeStopHook,
+  codexPromptHook,
+  codexStopHook,
+} from './hooks.ts';
 import { init } from './install.ts';
-import { digest, type Agent } from './digest.ts';
 import { serve } from './serve.ts';
-import { ensureTagged } from './tagger.ts';
-import { statsForDay, untaggedPromptsForDay, type DayStats } from './tags.ts';
-import { localDay } from './db.ts';
-import { capture, captureException, shutdown } from './telemetry.ts';
+import { ensureCompiled } from './compiler.ts';
+import { allActiveRules } from './rules.ts';
+import { type Agent } from './agent.ts';
+import { captureException, shutdown } from './telemetry.ts';
 
-const HELP = `rudder — record your AI coding prompts and digest your day.
+const HELP = `rudder — learn durable rules from your AI coding sessions.
 
 Usage:
   rudder init                 Create the database and install Claude Code + Codex hooks
-  rudder start [options]      Open a live dashboard of today's stats (updates as you work)
-  rudder stats [options]      Print today's correction rate and category breakdown
-  rudder digest [options]     Summarize a day's work into a Markdown digest
-  rudder tag [options]        Classify untagged prompts and print the day's stats
-  rudder hook claude          (internal) Record a Claude Code prompt from stdin
-  rudder hook codex           (internal) Record a Codex turn from the notify payload
-  rudder help                 Show this help
+  rudder start [options]      Run rule compilation and open the learned-rules dashboard
+  rudder rules [options]      Compile pending corrections and list active rules
 
 start options:
-  --agent claude|codex        Which LLM tags prompts (default: claude, else codex)
+  --agent claude|codex        Which LLM runs rule sub-agents (default: claude, else codex)
   --no-open                   Don't open the app/installer (just run the server)
 
-stats options:
-  --date YYYY-MM-DD           Day to report (default: today, local time)
-  --agent claude|codex        Which LLM classifies any untagged prompts first
-  --no-tag                    Show current tags only; skip classifying (instant)
-
-digest options:
-  --date YYYY-MM-DD           Day to summarize (default: today, local time)
-  --agent claude|codex        Which LLM to summarize with (default: claude, else codex)
-  --out PATH                  Output file (default: ./digest.md)
-
-tag options:
-  --date YYYY-MM-DD           Day to tag (default: today, local time)
-  --agent claude|codex        Which LLM classifies prompts (default: claude, else codex)
+rules options:
+  --agent claude|codex        Which LLM runs rule sub-agents
+  --no-compile                List stored rules without compiling pending prompts
 `;
 
 function parseFlags(args: string[]): Record<string, string> {
@@ -65,39 +54,6 @@ function parseAgentFlag(value: string | undefined): Agent | undefined {
   return value;
 }
 
-const CATEGORY_LABELS: Array<[keyof DayStats['byCategory'], string]> = [
-  ['architecting', 'Architecting'],
-  ['tuning', 'Tuning'],
-  ['bugfixing', 'Bugfixing'],
-  ['housekeeping', 'Housekeeping'],
-];
-
-/** Render a day's stats as a compact terminal report with little bar charts. */
-function formatStats(day: string, s: DayStats, untagged: number): string {
-  const lines: string[] = [];
-  lines.push(`rudder — ${day}`);
-  // Untagged prompts count as ignored; show them separately from real git chores.
-  const chores = s.ignored - untagged;
-  lines.push(
-    `${s.total} prompts · ${chores} git chores skipped · ${s.counted} counted` +
-      (untagged > 0 ? ` · ${untagged} not yet classified` : '')
-  );
-  const reacted = s.agree + s.disagree;
-  lines.push(
-    s.correctionPct === null
-      ? 'You never said no to your AI today.'
-      : `You said no to your AI ${s.correctionPct}% of the time  (${s.disagree} of ${reacted} yes/no reactions)`
-  );
-  lines.push('');
-  for (const [key, label] of CATEGORY_LABELS) {
-    const { pct, count } = s.byCategory[key];
-    const filled = Math.round((pct / 100) * 16);
-    const bar = '█'.repeat(filled) + '░'.repeat(16 - filled);
-    lines.push(`  ${label.padEnd(13)} ${String(pct).padStart(3)}%  ${bar}  ${count}`);
-  }
-  return lines.join('\n');
-}
-
 /** Hooks must never break the calling tool: log to stderr and still exit 0. */
 async function runHookSafely(fn: () => Promise<void>): Promise<void> {
   try {
@@ -105,7 +61,11 @@ async function runHookSafely(fn: () => Promise<void>): Promise<void> {
   } catch (err) {
     process.stderr.write(`rudder hook error (ignored): ${(err as Error).message}\n`);
   }
-  await shutdown();
+  try {
+    await shutdown();
+  } catch {
+    /* telemetry teardown must not make a capture hook fail */
+  }
   process.exit(0);
 }
 
@@ -120,10 +80,40 @@ export async function main(argv: string[]): Promise<void> {
 
     case 'hook': {
       const which = rest[0];
-      if (which === 'claude') return runHookSafely(() => claudeHook());
-      if (which === 'codex') return runHookSafely(() => codexHook(rest.slice(1)));
+      const event = rest[1] ?? 'prompt';
+      if (which === 'claude' && event === 'prompt') return runHookSafely(() => claudePromptHook());
+      if (which === 'claude' && event === 'stop') return runHookSafely(() => claudeStopHook());
+      if (which === 'codex' && event === 'prompt') return runHookSafely(() => codexPromptHook());
+      if (which === 'codex' && event === 'stop') return runHookSafely(() => codexStopHook());
       process.stderr.write("rudder: hook requires 'claude' or 'codex'\n");
       process.exit(0);
+      return;
+    }
+
+    case 'rules': {
+      const flags = parseFlags(rest);
+      const agent = parseAgentFlag(flags.agent);
+      try {
+        const pending =
+          flags['no-compile'] === 'true' ? undefined : ensureCompiled(agent);
+        const rules = allActiveRules();
+        const lines = [
+          `rudder — ${rules.length} active learned rule${rules.length === 1 ? '' : 's'}`,
+          ...(pending === undefined ? [] : [`${pending} prompt${pending === 1 ? '' : 's'} pending compilation`]),
+          ...rules.map(
+            (rule) =>
+              `- [${rule.atomic_id} v${rule.version}] (${rule.scope}${rule.project ? `:${rule.project}` : ''}) ` +
+              `${rule.rule_text} — when ${rule.applies_when}`
+          ),
+        ];
+        process.stdout.write(lines.join('\n') + '\n');
+        await shutdown();
+      } catch (err) {
+        captureException(err);
+        await shutdown();
+        console.error(`rudder: ${(err as Error).message}`);
+        process.exit(1);
+      }
       return;
     }
 
@@ -131,51 +121,6 @@ export async function main(argv: string[]): Promise<void> {
       const flags = parseFlags(rest);
       const agent = parseAgentFlag(flags.agent);
       serve({ agent, noOpen: flags['no-open'] === 'true' });
-      return;
-    }
-
-    case 'stats':
-    case 'tag': {
-      const flags = parseFlags(rest);
-      const agent = parseAgentFlag(flags.agent);
-      const day = flags.date || localDay();
-      try {
-        // `tag` always classifies; `stats` classifies unless --no-tag.
-        const remaining =
-          cmd === 'tag' || flags['no-tag'] !== 'true'
-            ? ensureTagged(day, agent)
-            : untaggedPromptsForDay(day).length;
-        const s = statsForDay(day);
-        process.stdout.write(formatStats(day, s, remaining) + '\n');
-        capture('stats viewed', {
-          command: cmd,
-          day,
-          total: s.total,
-          counted: s.counted,
-          no_tag: flags['no-tag'] === 'true',
-        });
-        await shutdown();
-      } catch (err) {
-        captureException(err);
-        await shutdown();
-        console.error(`rudder: ${(err as Error).message}`);
-        process.exit(1);
-      }
-      return;
-    }
-
-    case 'digest': {
-      const flags = parseFlags(rest);
-      const agent = parseAgentFlag(flags.agent);
-      try {
-        digest({ day: flags.date, agent, out: flags.out });
-        await shutdown();
-      } catch (err) {
-        captureException(err);
-        await shutdown();
-        console.error(`rudder: ${(err as Error).message}`);
-        process.exit(1);
-      }
       return;
     }
 

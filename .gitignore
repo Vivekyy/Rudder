@@ -6,7 +6,6 @@ dist/
 *.tsbuildinfo
 
 # Generated
-digest.md
 *.rudder-bak
 
 # Logs
