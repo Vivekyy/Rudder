@@ -93,7 +93,7 @@ test('serve exposes dashboard, asset, status, and notify routes', async () => {
 
     const dashboard = await fetch(`${base}/`);
     assert.equal(dashboard.status, 200);
-    assert.match(await dashboard.text(), /Rudder/);
+    assert.match(await dashboard.text(), /rudder learned rules/);
 
     const missing = await fetch(`${base}/missing`);
     assert.equal(missing.status, 404);
