@@ -433,40 +433,6 @@ test('compilation cannot update a rule whose latest version is inactive', async 
       ),
     /was not found/
   );
-
-  const thirdPromptId = insertPrompt({
-    source: 'claude',
-    prompt: 'Try to recreate the retired rule',
-    cwd: '/repos/inactive-target',
-    project: 'inactive-target',
-  })!;
-  queueTraceEvent(thirdPromptId, null, '', '');
-  const thirdEvent = pendingTraceEvents().find((row) => row.id === thirdPromptId)!;
-  assert.equal(
-    applyCompilation(
-      thirdEvent,
-      [
-        {
-          action: 'NEW',
-          existingAtomicId: null,
-          kind: 'preference',
-          scope: 'project',
-          enforced: false,
-          ruleText: '  Keep   retired rules retired. ',
-          appliesWhen: 'compiling learned rules',
-          doesNotApplyWhen: 'the rule is active',
-        },
-      ],
-      new Map(),
-      'claude',
-      1
-    ).length,
-    0
-  );
-  const recreated = openDb()
-    .prepare('SELECT COUNT(*) AS n FROM memory_rules WHERE rule_text = ? AND status = ?')
-    .get('Keep retired rules retired.', 'active') as { n: number };
-  assert.equal(recreated.n, 0);
 });
 
 test('completed trace events are not reprocessed by stale workers', async () => {

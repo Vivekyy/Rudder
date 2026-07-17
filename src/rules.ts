@@ -88,10 +88,6 @@ function latestRuleVersionClause() {
   )`;
 }
 
-function normalizeRuleText(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toLowerCase();
-}
-
 export function queueTraceEvent(
   promptId: number,
   transcriptPath: string | null,
@@ -614,27 +610,6 @@ function activeRuleByAtomicId(
 
 type RuleDb = ReturnType<typeof rudderDb> | Parameters<Parameters<ReturnType<typeof rudderDb>['transaction']>[0]>[0];
 
-function inactiveRuleMatchesNewCandidate(
-  candidate: RuleCandidate,
-  projectKey: string | null,
-  db: RuleDb
-): boolean {
-  const normalizedProject = normalizeProjectKey(projectKey);
-  const projectClause = normalizedProject
-    ? or(
-        eq(memoryRules.scope, 'global'),
-        and(eq(memoryRules.scope, 'project'), eq(memoryRules.project, normalizedProject))
-      )
-    : eq(memoryRules.scope, 'global');
-  const inactive = db
-    .select()
-    .from(memoryRules)
-    .where(and(eq(memoryRules.status, 'inactive'), latestRuleVersionClause(), projectClause))
-    .all() as MemoryRule[];
-  const candidateText = normalizeRuleText(candidate.ruleText);
-  return inactive.some((rule) => normalizeRuleText(rule.rule_text) === candidateText);
-}
-
 function applyCandidate(
   db: RuleDb,
   event: TraceEvent,
@@ -643,12 +618,6 @@ function applyCandidate(
   expectedVersions?: ReadonlyMap<string, number>
 ): MemoryRule | null {
   const projectKey = projectKeyForEvent(event);
-  if (
-    candidate.action === 'NEW' &&
-    inactiveRuleMatchesNewCandidate(candidate, projectKey, db)
-  ) {
-    return null;
-  }
   const existing = candidate.existingAtomicId
     ? activeRuleByAtomicId(candidate.existingAtomicId, projectKey, db)
     : null;
