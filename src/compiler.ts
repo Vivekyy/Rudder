@@ -3,6 +3,7 @@ import {
   activeRules,
   applyCompilation,
   claimTraceEvent,
+  inactiveRules,
   markTraceEvent,
   pendingTraceEvents,
   traceApplicability,
@@ -40,12 +41,13 @@ export function compileEvent(
   }
   try {
     const active = activeRules(event.project ?? event.cwd);
+    const inactive = inactiveRules(event.project ?? event.cwd);
     const applicability = traceApplicability(event);
     const applicableIds = new Set(applicability?.applicableAtomicIds ?? []);
     const applicable = active.filter((rule) => applicableIds.has(rule.atomic_id));
     const verifications = traceVerificationsForPrompt(event.id);
     const result = parseCompilation(
-      run(agent, 'writer', writerInstruction(event, applicable, verifications))
+      run(agent, 'writer', writerInstruction(event, applicable, inactive, verifications))
     );
     if (!result.signal) {
       markTraceEvent(event.id, 'skipped', agent, COMPILER_VERSION, undefined, claimToken);

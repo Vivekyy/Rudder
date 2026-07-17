@@ -77,6 +77,7 @@ function serializedVerifications(verifications: readonly TraceVerification[]): o
 export function writerInstruction(
   event: TraceEvent,
   applicable: readonly MemoryRule[],
+  inactive: readonly MemoryRule[],
   verifications: readonly TraceVerification[]
 ): string {
   return `Write durable user corrections as atomic rules for an AI coding assistant.
@@ -87,6 +88,7 @@ For each atomic signal, resolve it against APPLICABLE RULES selected at runtime:
 - NEW: no existing rule covers it.
 - NOOP: an active rule already expresses the same behavior.
 - UPDATE: refine or replace an existing rule while keeping its atomic id.
+Inactive rules are intentionally retired. Do not UPDATE or NOOP an inactive rule, and do not emit a NEW candidate that restates or semantically recreates an inactive rule. If every candidate would recreate inactive behavior, return {"signal":false,"reason":"inactive rules already retired this behavior","candidates":[]}.
 Split a message with multiple independent signals into multiple candidates.
 
 Rules must be concise directives. "applies_when" must be a positive condition. "does_not_apply_when" must state clear exceptions. "enforced" is true when Stop-hook verification should block/retry on violations; set it false for advisory context that should not block completion.
@@ -106,6 +108,9 @@ ${clipped(event.prompt)}
 
 RUNTIME APPLICABLE RULES:
 ${JSON.stringify(serializedRules(applicable))}
+
+INACTIVE RULES:
+${JSON.stringify(serializedRules(inactive))}
 
 RUNTIME VERIFIER ATTEMPTS:
 ${JSON.stringify(serializedVerifications(verifications))}`;

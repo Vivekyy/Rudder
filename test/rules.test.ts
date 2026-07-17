@@ -13,7 +13,7 @@ after(() => {
 });
 
 test('rule lifecycle stores versions and renders project-aware context', async () => {
-  const { insertPrompt, localDay } = await import('../src/db/index.ts');
+  const { insertPrompt, localDay, openDb } = await import('../src/db/index.ts');
   const {
     queueTraceEvent,
     pendingTraceEvents,
@@ -80,10 +80,17 @@ test('rule lifecycle stores versions and renders project-aware context', async (
   )!;
   assert.equal(updated.version, 2);
   assert.equal(updated.project, 'rule-project');
+  openDb().prepare('UPDATE memory_rules SET status = ? WHERE id = ?').run('active', first.id);
+  const visibleVersions = activeRules('/tmp/worktrees/rule-project').filter(
+    (rule) => rule.atomic_id === first.atomic_id
+  );
   assert.equal(
-    activeRules('/tmp/worktrees/rule-project').filter((rule) => rule.atomic_id === first.atomic_id).length,
+    visibleVersions.length,
     1
   );
+  assert.equal(visibleVersions[0].version, 2);
+  assert.equal(visibleVersions[0].rule_text, 'Use pnpm and preserve the lockfile.');
+  assert.doesNotMatch(renderRuleContext('/tmp/worktrees/rule-project'), /instead of npm/);
   assert.equal(localDay().length, 10);
 });
 
@@ -338,6 +345,94 @@ test('compilation rejects mixed actions for a repeated existing rule target', as
     .prepare('SELECT status FROM trace_events WHERE prompt_id = ?')
     .get(secondPromptId) as { status: string };
   assert.equal(trace.status, 'pending');
+});
+
+test('compilation cannot update a rule whose latest version is inactive', async () => {
+  const { insertPrompt, openDb } = await import('../src/db/index.ts');
+  const { queueTraceEvent, pendingTraceEvents, applyRuleCandidate, applyCompilation, inactiveRules } =
+    await import('../src/rules.ts');
+  const firstPromptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Retire stale rules instead of resurrecting them',
+    cwd: '/repos/inactive-target',
+    project: 'inactive-target',
+  })!;
+  queueTraceEvent(firstPromptId, null, '', '');
+  const firstEvent = pendingTraceEvents().find((row) => row.id === firstPromptId)!;
+  const first = applyRuleCandidate(
+    firstEvent,
+    {
+      action: 'NEW',
+      existingAtomicId: null,
+      kind: 'preference',
+      scope: 'project',
+      enforced: false,
+      ruleText: 'Avoid retired rules.',
+      appliesWhen: 'compiling learned rules',
+      doesNotApplyWhen: 'the rule is active',
+    },
+    0
+  )!;
+  const now = new Date().toISOString();
+  openDb()
+    .prepare(
+      `INSERT INTO memory_rules (
+        atomic_id, version, status, kind, scope, enforced, project, rule_text,
+        applies_when, does_not_apply_when, source_prompt_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      first.atomic_id,
+      2,
+      'inactive',
+      first.kind,
+      first.scope,
+      first.enforced ? 1 : 0,
+      first.project,
+      'Keep retired rules retired.',
+      first.applies_when,
+      first.does_not_apply_when,
+      firstPromptId,
+      now,
+      now
+    );
+  const secondPromptId = insertPrompt({
+    source: 'claude',
+    prompt: 'Try to update the retired rule',
+    cwd: '/repos/inactive-target',
+    project: 'inactive-target',
+  })!;
+  queueTraceEvent(secondPromptId, null, '', '');
+  const secondEvent = pendingTraceEvents().find((row) => row.id === secondPromptId)!;
+
+  assert.deepEqual(
+    inactiveRules('/repos/inactive-target')
+      .filter((rule) => rule.atomic_id === first.atomic_id)
+      .map((rule) => [rule.atomic_id, rule.version]),
+    [[first.atomic_id, 2]]
+  );
+  assert.throws(
+    () =>
+      applyCompilation(
+        secondEvent,
+        [
+          {
+            action: 'UPDATE',
+            existingAtomicId: first.atomic_id,
+            kind: 'preference',
+            scope: 'project',
+            enforced: false,
+            ruleText: 'Update retired rules.',
+            appliesWhen: 'compiling learned rules',
+            doesNotApplyWhen: 'the rule is active',
+          },
+        ],
+        new Map([[first.atomic_id, first.version]]),
+        'claude',
+        1
+      ),
+    /was not found/
+  );
 });
 
 test('completed trace events are not reprocessed by stale workers', async () => {
