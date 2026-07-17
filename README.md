@@ -15,12 +15,6 @@
 **Rudder records the prompts you give your AI coding assistants and learns
 durable rules from your corrections.**
 
-Rudder is a tool for understanding what you actually do when you code with AI.
-AI coding tools make it easy to generate, edit, review, and ship code quickly,
-but they can also make your work hard to see. You can spend hours prompting,
-reading, accepting, rejecting, rewriting, testing, and steering the tool without
-actually feeling like you truly produced the eventual code output.
-
 The goal of rudder is to give the person doing the work a truthful record
 of their own AI-assisted coding process so they can understand their decisions,
 improve their workflow, and build better software.
@@ -53,33 +47,30 @@ Rudder starts from a simple problem: When I code with AI, I feel like I haven't
 done anything except watch my agent code for me.
 
 The final diff tells only part of the story. It does not show how I got there,
-where I changed direction, what I trusted, what I rewrote, or what I tested.
+where I changed direction, what I trusted, or what I rewrote.
 
-Rudder exists to make that path visible.
-
-The important question is not "Did AI write this?" It is "What did the human
-do?"
+Today's agents write code for you. Rudder exists to make them write code with you.
 
 ## How it works
 
 ```
-┌──────────────┐  UserPromptSubmit/Stop hooks ┌─────────────────────┐
+┌──────────────┐  UserPromptSubmit/Stop hooks  ┌─────────────────────┐
 │ Claude/Codex │ ◀──────────────────────────▶ │ ~/.rudder/rudder.db │
-└──────────────┘  applicable rules + verdicts └──────────┬──────────┘
-                                                         │ out-of-band TRACE
-                                                         ▼
-                                                    rule writing
+└──────────────┘  applicable rules + verdicts  └──────────┬──────────┘
+                                                          │ out-of-band CLI call
+                                                          ▼
+                                                     rule writing
 ```
 
 - **Local only.** Everything lives in `~/.rudder/rudder.db`. Rule generation
   uses the LLM CLI you already use. Your data stays yours.
 - **Non-intrusive.** The hooks are fail-safe — if rudder ever errors, it logs to
   stderr and exits `0` so it never blocks or breaks Claude Code or Codex.
-- **TRACE-inspired memory.** Rudder reads the bounded tail of the local session
+- **Rule injection & enforcement.** Rudder reads the bounded tail of the local session
   transcript, runs an applicability sub-agent at prompt submit to inject only
-  relevant rules, and runs a verifier sub-agent at Stop to retry when enforced
-  rules were violated. The out-of-band writer resolves durable preferences and
-  repeated pitfalls as versioned atomic rules.
+  relevant rules into agent context, and runs a verifier sub-agent at Stop to
+  retry when enforced rules were violated. The out-of-band writer resolves durable
+  preferences and repeated pitfalls as versioned atomic rules.
 
 ## Requirements
 
@@ -98,8 +89,7 @@ rudder init                       # creates the database and installs the hooks
 `rudder init`:
 1. Creates `~/.rudder/rudder.db`.
 2. Adds `UserPromptSubmit` and `Stop` hooks to `~/.claude/settings.json`.
-3. Adds `UserPromptSubmit` and `Stop` hooks to `~/.codex/hooks.json` and removes
-   Rudder's obsolete post-turn `notify` entry, if present.
+3. Adds `UserPromptSubmit` and `Stop` hooks to `~/.codex/hooks.json`.
 
 Existing config files are backed up to `*.rudder-bak` before being modified, and
 the command is idempotent — running it twice won't duplicate the hooks.
@@ -145,7 +135,7 @@ instead — the `npm link` symlink picks up the new code with no rebuild.
 ### `rudder start`
 
 Starts a small local server (on `127.0.0.1`, port `41789` — override with
-`RUDDER_PORT`). While it runs, each new prompt queues a TRACE event. Your
+`RUDDER_PORT`). While it runs, each new prompt queues an event. Your
 `claude`/`codex` CLI processes those events out of band, and the dashboard
 updates live with active learned rules and the pending prompt count.
 
@@ -184,7 +174,7 @@ call is made before Claude Code or Codex receives the prompt.
 
 All prompts are stored in plaintext in `~/.rudder/rudder.db` (schema: timestamp,
 local day, source, session id, working directory, project, prompt text, model,
-and the raw hook payload). Companion tables hold queued TRACE evidence, runtime
+and the raw hook payload). Companion tables hold queued rule evidence, runtime
 applicability/verifier outputs, versioned learned rules, and rule provenance.
 Rule sub-agents use the same local `claude`/`codex` CLI — nothing is sent
 anywhere else. To wipe everything, delete `~/.rudder/`. To stop recording,
