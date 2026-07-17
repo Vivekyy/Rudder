@@ -10,8 +10,13 @@ test('PWA manifest is installable and the service worker has a fetch handler', a
   const serviceWorker = readFileSync(join(process.cwd(), 'frontend', 'public', 'sw.js'), 'utf8');
   assert.equal(manifest.display, 'standalone');
   assert.ok(manifest.start_url);
-  assert.deepEqual(manifest.icons, [
-    { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
-  ]);
+  assert.ok(
+    manifest.icons.some(
+      (icon: { src: string; sizes: string; type: string }) =>
+        icon.src === '/icon.svg' && icon.sizes === 'any' && icon.type === 'image/svg+xml'
+    )
+  );
+  const sizes = manifest.icons.map((icon: { sizes: string }) => icon.sizes);
+  assert.ok(sizes.includes('192x192') && sizes.includes('512x512'), 'needs 192 + 512 icons');
   assert.match(serviceWorker, /addEventListener\("fetch"/);
 });

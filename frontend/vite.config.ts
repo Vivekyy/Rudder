@@ -17,6 +17,8 @@ export default defineConfig({
       '/api': rudderTarget,
       '/events': rudderTarget,
       '/icon.svg': rudderTarget,
+      '/icon-192.png': rudderTarget,
+      '/icon-512.png': rudderTarget,
     },
   },
 });
