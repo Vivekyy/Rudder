@@ -1,7 +1,6 @@
 # References
 
-The following papers inspired Rudder's approach to turning agent experience and
-user feedback into durable runtime guidance.
+The following resources influenced Rudder's approach:
 
 ## Getting Better at Working With You: Compiling User Corrections into Runtime Enforcement for Coding Agents
 
