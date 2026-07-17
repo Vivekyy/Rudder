@@ -48,6 +48,7 @@ test('rule lifecycle stores versions and renders project-aware context', async (
     0
   )!;
   assert.equal(first.version, 1);
+  assert.match(first.atomic_id, /^rule_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(first.project, 'rule-project');
   assert.match(renderRuleContext('/repos/rule-project'), /Use pnpm instead of npm/);
   assert.match(renderRuleContext('/tmp/worktrees/rule-project'), /Use pnpm instead of npm/);
@@ -84,6 +85,67 @@ test('rule lifecycle stores versions and renders project-aware context', async (
     1
   );
   assert.equal(localDay().length, 10);
+});
+
+test('manual rules validate input and preserve immutable versions', async () => {
+  const {
+    allActiveRules,
+    createManualRule,
+    deleteManualRule,
+    setManualRuleEnforced,
+    updateManualRule,
+  } = await import('../src/rules.ts');
+
+  assert.throws(
+    () =>
+      createManualRule({
+        ruleText: '',
+        appliesWhen: 'working in the dashboard',
+        doesNotApplyWhen: 'rules are learned automatically',
+        enforced: true,
+      }),
+    /ruleText is required/
+  );
+
+  const created = createManualRule({
+    ruleText: '  Review manual rules before enforcing them.  ',
+    appliesWhen: '  editing dashboard rules  ',
+    doesNotApplyWhen: '  using learned rules untouched  ',
+    enforced: false,
+  });
+  assert.equal(created.version, 1);
+  assert.equal(created.rule_text, 'Review manual rules before enforcing them.');
+  assert.equal(created.applies_when, 'editing dashboard rules');
+  assert.equal(created.does_not_apply_when, 'using learned rules untouched');
+  assert.equal(created.enforced, false);
+
+  assert.equal(setManualRuleEnforced(created.id, false).id, created.id);
+  assert.equal(setManualRuleEnforced(created.id, true).enforced, true);
+
+  const updated = updateManualRule(created.id, {
+    ruleText: 'Review manual rules with context.',
+    appliesWhen: 'curating dashboard rules',
+    doesNotApplyWhen: 'the rule is generated automatically',
+    enforced: true,
+  });
+  assert.equal(updated.atomic_id, created.atomic_id);
+  assert.equal(updated.version, 2);
+  assert.equal(updated.rule_text, 'Review manual rules with context.');
+  assert.throws(
+    () =>
+      updateManualRule(created.id, {
+        ruleText: 'Old versions are inactive.',
+        appliesWhen: 'editing dashboard rules',
+        doesNotApplyWhen: 'the active version is selected',
+        enforced: false,
+      }),
+    /active rule not found/
+  );
+
+  deleteManualRule(updated.id);
+  assert.ok(!allActiveRules().some((rule) => rule.atomic_id === created.atomic_id));
+  assert.throws(() => deleteManualRule(updated.id), /active rule not found/);
+  assert.throws(() => setManualRuleEnforced(updated.id, false), /active rule not found/);
 });
 
 test('compilation rolls back all candidates when one lifecycle action fails', async () => {
