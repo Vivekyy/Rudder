@@ -89,7 +89,7 @@ test('serve exposes dashboard, asset, status, and notify routes', async () => {
 
     const install = await fetch(`${base}/install`);
     assert.equal(install.status, 200);
-    assert.match(await install.text(), /Install Rudder/);
+    assert.match(await install.text(), /Install rudder/);
 
     const dashboard = await fetch(`${base}/`);
     assert.equal(dashboard.status, 200);
