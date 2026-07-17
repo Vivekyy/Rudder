@@ -40,8 +40,9 @@
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "node --test test/*.ts",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "test": "node --test test/*.test.ts",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-include='bin/**/*.ts' --test-coverage-lines=70 --test-coverage-branches=70 --test-coverage-functions=70 test/*.test.ts",
+    "prepublishOnly": "npm run typecheck && npm run test:coverage && npm run build"
   },
   "dependencies": {
     "drizzle-orm": "^1.0.0-rc.4",
