@@ -148,3 +148,15 @@ test('resolveAgent returns the preferred agent without probing PATH', async () =
 
   assert.equal(resolveAgent('codex'), 'codex');
 });
+
+test('common sub-agent helpers validate JSON and required strings', async () => {
+  const { parseObject, requiredString, clipped } = await import('../src/subagents/common.ts');
+
+  assert.deepEqual(parseObject('prefix {"ok":true} suffix', 'test role'), { ok: true });
+  assert.equal(requiredString('  abc  ', 'field', 2), 'ab');
+  assert.equal(clipped(null), '');
+  assert.equal(clipped('abcdef', 3), 'abc');
+  assert.throws(() => parseObject('no json here', 'test role'), /returned no JSON object/);
+  assert.throws(() => parseObject('{not json}', 'test role'), /returned invalid JSON/);
+  assert.throws(() => requiredString('   ', 'field'), /no field/);
+});

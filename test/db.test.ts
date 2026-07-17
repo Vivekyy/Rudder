@@ -85,6 +85,18 @@ test('insertPrompt stores and queries by local day; blanks are skipped', async (
   assert.equal(rows[0].prompt, 'Fix the deploy'); // trimmed
   assert.equal(rows[0].source, 'claude');
   assert.equal(rows[0].project, 'archer');
+
+  const explicitDay = '2026-02-03';
+  const explicitId = insertPrompt({
+    source: 'codex',
+    prompt: 'Timed prompt',
+    ts: new Date(`${explicitDay}T12:00:00.000Z`),
+  });
+  assert.ok(explicitId && explicitId > id);
+  const explicitRows = promptsForDay(explicitDay);
+  assert.equal(explicitRows.length, 1);
+  assert.equal(explicitRows[0].prompt, 'Timed prompt');
+  assert.equal(explicitRows[0].cwd, null);
 });
 
 test('migrationsFolder resolves from source and published layouts', async () => {

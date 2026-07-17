@@ -41,3 +41,15 @@ test('commands reject invalid agent flags', () => {
     home.restore();
   }
 });
+
+test('unknown commands exit non-zero and print help', () => {
+  const home = useTempHome('rudder-cli-unknown-test-');
+  try {
+    const res = runRudder(['bogus'], home.path);
+    assert.equal(res.status, 1);
+    assert.match(res.stderr, /unknown command 'bogus'/);
+    assert.match(res.stderr, /Usage:/);
+  } finally {
+    home.restore();
+  }
+});

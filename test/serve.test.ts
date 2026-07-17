@@ -77,7 +77,7 @@ test('serve exposes dashboard, asset, status, and notify routes', async () => {
 
     const manifest = await fetch(`${base}/manifest.webmanifest`);
     assert.equal(manifest.status, 200);
-    assert.match(await manifest.text(), /Rudder/);
+    assert.match(await manifest.text(), /rudder/);
 
     const serviceWorker = await fetch(`${base}/sw.js`);
     assert.equal(serviceWorker.status, 200);

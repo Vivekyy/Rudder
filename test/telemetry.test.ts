@@ -1,6 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { useTempHome, type TempHome } from './helpers.ts';
 
@@ -37,4 +37,30 @@ test('distinctId is generated once and persisted for no-key capture calls', asyn
   capture('test event', { ok: true });
   captureException(new Error('boom'), { handled: true });
   await shutdown();
+});
+
+test('distinctId reuses valid stored identity files', async () => {
+  const storedHome = useTempHome('rudder-telemetry-stored-test-');
+  try {
+    const id = '11111111-1111-4111-8111-111111111111';
+    mkdirSync(storedHome.path, { recursive: true });
+    writeFileSync(join(storedHome.path, 'identity.json'), JSON.stringify({ id }));
+
+    const telemetry = await import(`../src/telemetry.ts?stored=${Date.now()}`);
+    assert.equal(telemetry.distinctId(), id);
+  } finally {
+    storedHome.restore();
+  }
+});
+
+test('distinctId replaces malformed identity files', async () => {
+  const malformedHome = useTempHome('rudder-telemetry-malformed-test-');
+  try {
+    writeFileSync(join(malformedHome.path, 'identity.json'), '{malformed');
+
+    const telemetry = await import(`../src/telemetry.ts?malformed=${Date.now()}`);
+    assert.match(telemetry.distinctId(), /^[0-9a-f-]{36}$/);
+  } finally {
+    malformedHome.restore();
+  }
 });
