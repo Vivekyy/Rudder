@@ -45,14 +45,14 @@ keeps immutable versions, an `enforced` flag controls Stop-hook verification,
 and `rule_evidence` preserves provenance.
 
 Out-of-band compilation now runs only the writer sub-agent. `rudder start`
-debounces it after prompt notifications, and `rudder rules` can run it
-explicitly. The writer receives the persisted runtime applicability and verifier
-outputs instead of rerunning those roles speculatively.
+debounces it after prompt notifications. The writer receives the persisted
+runtime applicability and verifier outputs instead of rerunning those roles
+speculatively.
 
 `subagents/runner.ts` starts a fresh Claude or Codex child process for every role and sets
 `RUDDER_DISABLE=1`/`RUDDER_CHILD_SESSION=1`, so internal prompts never re-enter
 the capture hook. `rudder start` debounces notifications and drains queued TRACE
-events; `rudder rules` can run compilation explicitly.
+events.
 
 ## Local development
 
