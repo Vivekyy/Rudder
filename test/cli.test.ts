@@ -9,7 +9,7 @@ test('CLI help exposes only the supported public commands', () => {
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /rudder init/);
     assert.match(res.stdout, /rudder start/);
-    assert.match(res.stdout, /rudder rules/);
+    assert.doesNotMatch(res.stdout, /rudder rules/);
     assert.doesNotMatch(res.stdout, /rudder digest/);
     assert.doesNotMatch(res.stdout, /rudder stats/);
     assert.doesNotMatch(res.stdout, /rudder tag/);
@@ -19,13 +19,12 @@ test('CLI help exposes only the supported public commands', () => {
   }
 });
 
-test('rules command lists active rules without compiling when requested', () => {
+test('rules command is no longer supported', () => {
   const home = useTempHome('rudder-cli-rules-test-');
   try {
     const res = runRudder(['rules', '--no-compile'], home.path);
-    assert.equal(res.status, 0, res.stderr);
-    assert.match(res.stdout, /rudder . 0 active learned rules/);
-    assert.doesNotMatch(res.stdout, /pending compilation/);
+    assert.equal(res.status, 1);
+    assert.match(res.stderr, /unknown command 'rules'/);
   } finally {
     home.restore();
   }
@@ -34,7 +33,7 @@ test('rules command lists active rules without compiling when requested', () => 
 test('commands reject invalid agent flags', () => {
   const home = useTempHome('rudder-cli-agent-test-');
   try {
-    const res = runRudder(['rules', '--agent', 'llama'], home.path);
+    const res = runRudder(['start', '--agent', 'llama'], home.path);
     assert.equal(res.status, 1);
     assert.match(res.stderr, /--agent must be 'claude' or 'codex'/);
   } finally {

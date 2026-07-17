@@ -35,7 +35,6 @@ logged automatically. Run the daemon to compile corrections as you work:
 
 ```bash
 rudder start      # compile queued evidence and open the learned-rules dashboard
-rudder rules      # compile pending corrections and list active learned rules
 ```
 
 Requires Node.js ≥ 23.6 and at least one of `claude` / `codex` on your `PATH`.
@@ -57,7 +56,7 @@ Today's agents write code for you. Rudder exists to make them write code with yo
 ┌──────────────┐  UserPromptSubmit/Stop hooks  ┌─────────────────────┐
 │ Claude/Codex │ ◀──────────────────────────▶ │ ~/.rudder/rudder.db │
 └──────────────┘  applicable rules + verdicts  └──────────┬──────────┘
-                                                          │ out-of-band CLI call
+                                                          │ rudder start daemon
                                                           ▼
                                                      rule writing
 ```
@@ -130,7 +129,6 @@ instead — the `npm link` symlink picks up the new code with no rebuild.
 | --- | --- |
 | `rudder init` | Create the database and install the Claude Code + Codex hooks. |
 | `rudder start [options]` | Run rule compilation and open the learned-rules dashboard. |
-| `rudder rules [options]` | Compile pending corrections and list active learned rules. |
 
 ### `rudder start`
 
@@ -151,20 +149,7 @@ If you'd rather not install anything, open `http://127.0.0.1:41789/` in a browse
 
 It's safe to leave running and safe to run twice (a second `rudder start` just
 re-opens the window). If the daemon isn't running, TRACE events stay queued and
-are compiled the next time you run `rudder start` or `rudder rules`.
-
-### `rudder rules`
-
-Compiles queued prompt/session evidence into atomic rules, then lists the active
-rules. Compilation runs three fresh local `claude` or `codex` child sessions:
-the applicability sub-agent selects relevant active rules, the verifier checks
-whether prior behavior enforced them, and the writer emits `NEW`, `NOOP`, or
-`UPDATE` lifecycle decisions. Updates retain older versions in SQLite for audit.
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `--agent claude\|codex` | `claude`, else `codex` | Which LLM runs the sub-agents. |
-| `--no-compile` | off | List stored rules without running the compiler. |
+are compiled the next time you run `rudder start`.
 
 When `rudder start` is running, compilation happens automatically after the
 capture debounce. Prompt-time retrieval is local and deterministic: no model
