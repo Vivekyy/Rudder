@@ -50,19 +50,30 @@ function installClaudeHook(): string {
     }
   }
 
-  const argv = rudderArgv(['hook', 'claude']);
-  const command = quote(argv);
+  const promptArgv = rudderArgv(['hook', 'claude', 'prompt']);
+  const stopArgv = rudderArgv(['hook', 'claude', 'stop']);
+  const promptCommand = quote(promptArgv);
+  const stopCommand = quote(stopArgv);
   settings.hooks ??= {};
   settings.hooks.UserPromptSubmit ??= [];
+  settings.hooks.Stop ??= [];
 
-  const already = JSON.stringify(settings.hooks.UserPromptSubmit).includes(argv[1]);
-  if (!already) {
+  const promptAlready = JSON.stringify(settings.hooks.UserPromptSubmit).includes(promptArgv[1]);
+  const stopAlready = JSON.stringify(settings.hooks.Stop).includes(stopArgv[1]);
+  if (!promptAlready) {
     settings.hooks.UserPromptSubmit.push({
-      hooks: [{ type: 'command', command }],
+      hooks: [{ type: 'command', command: promptCommand, timeout: 30 }],
     });
+  }
+  if (!stopAlready) {
+    settings.hooks.Stop.push({
+      hooks: [{ type: 'command', command: stopCommand, timeout: 60 }],
+    });
+  }
+  if (!promptAlready || !stopAlready) {
     backup(settingsPath);
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-    return `installed → ${settingsPath}`;
+    return `installed/updated → ${settingsPath}`;
   }
   return `already present → ${settingsPath}`;
 }
@@ -75,8 +86,10 @@ function installCodexHook(): string {
   const configPath = join(homedir(), '.codex', 'config.toml');
   mkdirSync(codexDir, { recursive: true });
 
-  const argv = rudderArgv(['hook', 'codex']);
-  const command = quote(argv);
+  const promptArgv = rudderArgv(['hook', 'codex', 'prompt']);
+  const stopArgv = rudderArgv(['hook', 'codex', 'stop']);
+  const promptCommand = quote(promptArgv);
+  const stopCommand = quote(stopArgv);
   let hooks: Record<string, any> = {};
   if (existsSync(hooksPath)) {
     try {
@@ -87,11 +100,20 @@ function installCodexHook(): string {
   }
   hooks.hooks ??= {};
   hooks.hooks.UserPromptSubmit ??= [];
-  const already = JSON.stringify(hooks.hooks.UserPromptSubmit).includes(argv[1]);
-  if (!already) {
+  hooks.hooks.Stop ??= [];
+  const promptAlready = JSON.stringify(hooks.hooks.UserPromptSubmit).includes(promptArgv[1]);
+  const stopAlready = JSON.stringify(hooks.hooks.Stop).includes(stopArgv[1]);
+  if (!promptAlready) {
     hooks.hooks.UserPromptSubmit.push({
-      hooks: [{ type: 'command', command, timeout: 5 }],
+      hooks: [{ type: 'command', command: promptCommand, timeout: 30 }],
     });
+  }
+  if (!stopAlready) {
+    hooks.hooks.Stop.push({
+      hooks: [{ type: 'command', command: stopCommand, timeout: 60 }],
+    });
+  }
+  if (!promptAlready || !stopAlready) {
     backup(hooksPath);
     writeFileSync(hooksPath, JSON.stringify(hooks, null, 2) + '\n');
   }
@@ -109,7 +131,7 @@ function installCodexHook(): string {
       writeFileSync(configPath, migrated);
     }
   }
-  return `${already ? 'already present' : 'installed'} → ${hooksPath}`;
+  return `${promptAlready && stopAlready ? 'already present' : 'installed/updated'} → ${hooksPath}`;
 }
 
 export function init(): void {

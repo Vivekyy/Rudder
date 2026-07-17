@@ -33,9 +33,16 @@ export const traceEvents = sqliteTable(
     prompt_id: integer('prompt_id')
       .primaryKey()
       .references(() => prompts.id),
+    turn_id: text('turn_id'),
+    hook_prompt_id: text('hook_prompt_id'),
     transcript_path: text('transcript_path'),
     task_text: text('task_text'),
     behavior_text: text('behavior_text'),
+    applicable_atomic_ids: text('applicable_atomic_ids'),
+    applicability_reason: text('applicability_reason'),
+    applicability_agent: text('applicability_agent'),
+    applicability_version: integer('applicability_version'),
+    applicability_ts: text('applicability_ts'),
     status: text('status').notNull().default('pending'),
     compiler: text('compiler'),
     compiler_version: integer('compiler_version'),
@@ -57,6 +64,7 @@ export const memoryRules = sqliteTable(
     status: text('status', { enum: ['active', 'inactive'] }).notNull(),
     kind: text('kind', { enum: ['preference', 'pitfall'] }).notNull(),
     scope: text('scope', { enum: ['global', 'project'] }).notNull(),
+    enforced: integer('enforced', { mode: 'boolean' }).notNull().default(true),
     project: text('project'),
     rule_text: text('rule_text').notNull(),
     applies_when: text('applies_when').notNull(),
@@ -70,6 +78,24 @@ export const memoryRules = sqliteTable(
     index('idx_memory_rules_status').on(table.status),
     index('idx_memory_rules_project').on(table.project),
   ]
+);
+
+export const traceVerifications = sqliteTable(
+  'trace_verifications',
+  {
+    prompt_id: integer('prompt_id')
+      .notNull()
+      .references(() => prompts.id),
+    attempt: integer('attempt').notNull(),
+    enforced: integer('enforced', { mode: 'boolean' }).notNull(),
+    reason: text('reason').notNull(),
+    verdicts: text('verdicts').notNull(),
+    blocked: integer('blocked', { mode: 'boolean' }).notNull(),
+    verifier: text('verifier').notNull(),
+    verifier_version: integer('verifier_version').notNull(),
+    ts: text('ts').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.prompt_id, table.attempt] })]
 );
 
 export const ruleEvidence = sqliteTable(
@@ -90,6 +116,7 @@ export const ruleEvidence = sqliteTable(
 export const schema = {
   prompts,
   traceEvents,
+  traceVerifications,
   memoryRules,
   ruleEvidence,
 };

@@ -36,6 +36,7 @@ test('openDb applies generated Drizzle migrations idempotently', async () => {
     'prompts',
     'rule_evidence',
     'trace_events',
+    'trace_verifications',
   ]) {
     assert.ok(tables.has(table), `expected ${table} to be created`);
   }
@@ -62,7 +63,7 @@ test('openDb applies generated Drizzle migrations idempotently', async () => {
   const migrations = db
     .prepare('SELECT hash, created_at FROM __drizzle_migrations')
     .all() as { hash: string; created_at: number }[];
-  assert.equal(migrations.length, 2);
+  assert.equal(migrations.length, 3);
   assert.ok(migrations[0].hash);
   assert.ok(migrations[0].created_at > 0);
 });
@@ -322,6 +323,7 @@ test('compiler parser rejects malformed lifecycle output', async () => {
           existing_atomic_id: null,
           kind: 'preference',
           scope: 'global',
+          enforced: false,
           rule_text: 'Keep responses concise.',
           applies_when: 'answering routine questions',
           does_not_apply_when: 'detail is requested',
@@ -331,6 +333,7 @@ test('compiler parser rejects malformed lifecycle output', async () => {
   );
   assert.equal(parsed.candidates.length, 1);
   assert.equal(parsed.candidates[0].ruleText, 'Keep responses concise.');
+  assert.equal(parsed.candidates[0].enforced, false);
   assert.throws(
     () =>
       parseCompilation(
@@ -365,13 +368,15 @@ test('compiler parser rejects malformed lifecycle output', async () => {
   });
 });
 
-test('compiler delegates applicability, verification, and writing to isolated roles', async () => {
+test('compiler delegates writing with runtime applicability and verification context', async () => {
   const { insertPrompt, openDb } = await import('../src/db/index.ts');
   const {
     queueTraceEvent,
     pendingTraceEvents,
     applyRuleCandidate,
     markTraceEvent,
+    markTraceApplicability,
+    recordTraceVerification,
   } = await import('../src/rules.ts');
   const { compileEvent, parseApplicability } = await import('../src/compiler.ts');
 
@@ -414,7 +419,31 @@ test('compiler delegates applicability, verification, and writing to isolated ro
     project: 'subagent-pipeline',
   })!;
   queueTraceEvent(promptId, null, 'refactor the endpoint implementation', 'renamed the endpoint');
-  const event = pendingTraceEvents().find((row) => row.id === promptId)!;
+  markTraceApplicability(
+    promptId,
+    [rule.atomic_id],
+    'the task changes a public interface',
+    'claude',
+    1
+  );
+  const eventWithApplicability = pendingTraceEvents().find((row) => row.id === promptId)!;
+  recordTraceVerification(
+    promptId,
+    {
+      enforced: false,
+      reason: 'the endpoint was renamed',
+      verdicts: [
+        {
+          atomicId: rule.atomic_id,
+          compliant: false,
+          reason: 'assistant renamed the endpoint',
+        },
+      ],
+    },
+    true,
+    'claude',
+    1
+  );
   const roles: string[] = [];
   const runner = (
     _agent: 'claude' | 'codex',
@@ -422,27 +451,6 @@ test('compiler delegates applicability, verification, and writing to isolated ro
     instruction: string
   ): string => {
     roles.push(role);
-    if (role === 'applicability') {
-      assert.match(instruction, /Preserve the public API/);
-      return JSON.stringify({
-        applicable_atomic_ids: [rule.atomic_id],
-        reason: 'the task changes a public interface',
-      });
-    }
-    if (role === 'verifier') {
-      assert.match(instruction, new RegExp(rule.atomic_id));
-      return JSON.stringify({
-        enforced: false,
-        reason: 'the endpoint was renamed',
-        verdicts: [
-          {
-            atomic_id: rule.atomic_id,
-            compliant: false,
-            reason: 'assistant renamed the endpoint',
-          },
-        ],
-      });
-    }
     assert.match(instruction, /"enforced":false/);
     assert.match(instruction, /"kind":"preference\|pitfall"/);
     assert.doesNotMatch(instruction, /preference\|pitfall\|friction/);
@@ -455,6 +463,7 @@ test('compiler delegates applicability, verification, and writing to isolated ro
           existing_atomic_id: rule.atomic_id,
           kind: 'pitfall',
           scope: 'project',
+          enforced: rule.enforced,
           rule_text: rule.rule_text,
           applies_when: rule.applies_when,
           does_not_apply_when: rule.does_not_apply_when,
@@ -463,8 +472,8 @@ test('compiler delegates applicability, verification, and writing to isolated ro
     });
   };
 
-  const result = compileEvent(event, 'claude', runner);
-  assert.deepEqual(roles, ['applicability', 'verifier', 'writer']);
+  const result = compileEvent(eventWithApplicability, 'claude', runner);
+  assert.deepEqual(roles, ['writer']);
   assert.equal(result.candidates[0].action, 'NOOP');
   const trace = openDb()
     .prepare('SELECT status FROM trace_events WHERE prompt_id = ?')

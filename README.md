@@ -63,13 +63,12 @@ do?"
 ## How it works
 
 ```
-┌──────────────┐   UserPromptSubmit hook   ┌─────────────────────┐
-│ Claude/Codex │ ◀───────────────────────▶ │ ~/.rudder/rudder.db │
-└──────────────┘   prompt + saved rules    └──────────┬──────────┘
-                                                      │ out-of-band TRACE
-                                                      ▼
-                                          applicability → verification
-                                                   → rule writing
+┌──────────────┐  UserPromptSubmit/Stop hooks ┌─────────────────────┐
+│ Claude/Codex │ ◀──────────────────────────▶ │ ~/.rudder/rudder.db │
+└──────────────┘  applicable rules + verdicts └──────────┬──────────┘
+                                                         │ out-of-band TRACE
+                                                         ▼
+                                                    rule writing
 ```
 
 - **Local only.** Everything lives in `~/.rudder/rudder.db`. Rule generation
@@ -77,10 +76,10 @@ do?"
 - **Non-intrusive.** The hooks are fail-safe — if rudder ever errors, it logs to
   stderr and exits `0` so it never blocks or breaks Claude Code or Codex.
 - **TRACE-inspired memory.** Rudder reads the bounded tail of the local session
-  transcript and runs isolated applicability, enforcement-verification, and
-  rule-writer sub-agents out of band. The writer resolves durable preferences
-  and repeated pitfalls as versioned atomic rules. Up to 12
-  project/global rules are injected on later turns; no LLM runs in the hook.
+  transcript, runs an applicability sub-agent at prompt submit to inject only
+  relevant rules, and runs a verifier sub-agent at Stop to retry when enforced
+  rules were violated. The out-of-band writer resolves durable preferences and
+  repeated pitfalls as versioned atomic rules.
 
 ## Requirements
 
@@ -98,9 +97,9 @@ rudder init                       # creates the database and installs the hooks
 
 `rudder init`:
 1. Creates `~/.rudder/rudder.db`.
-2. Adds a `UserPromptSubmit` hook to `~/.claude/settings.json`.
-3. Adds a `UserPromptSubmit` hook to `~/.codex/hooks.json` and removes Rudder's
-   obsolete post-turn `notify` entry, if present.
+2. Adds `UserPromptSubmit` and `Stop` hooks to `~/.claude/settings.json`.
+3. Adds `UserPromptSubmit` and `Stop` hooks to `~/.codex/hooks.json` and removes
+   Rudder's obsolete post-turn `notify` entry, if present.
 
 Existing config files are backed up to `*.rudder-bak` before being modified, and
 the command is idempotent — running it twice won't duplicate the hooks.
@@ -185,11 +184,11 @@ call is made before Claude Code or Codex receives the prompt.
 
 All prompts are stored in plaintext in `~/.rudder/rudder.db` (schema: timestamp,
 local day, source, session id, working directory, project, prompt text, model,
-and the raw hook payload). Companion tables hold queued TRACE evidence, versioned
-learned rules, and rule provenance. Rule sub-agents use the same local
-`claude`/`codex` CLI — nothing is sent anywhere else. To wipe everything, delete
-`~/.rudder/`. To stop recording, remove the hook from
-`~/.claude/settings.json` and `~/.codex/hooks.json`.
+and the raw hook payload). Companion tables hold queued TRACE evidence, runtime
+applicability/verifier outputs, versioned learned rules, and rule provenance.
+Rule sub-agents use the same local `claude`/`codex` CLI — nothing is sent
+anywhere else. To wipe everything, delete `~/.rudder/`. To stop recording,
+remove the hook from `~/.claude/settings.json` and `~/.codex/hooks.json`.
 
 Set `RUDDER_HOME` to override the storage location (used by the test suite). The
 hooks honor `RUDDER_DISABLE` — rudder sets it on internal agent calls, so
@@ -197,8 +196,8 @@ sub-agent prompts are never recorded.
 
 ## Uninstall
 
-1. Remove the `UserPromptSubmit` entry from `~/.claude/settings.json`.
-2. Remove the Rudder `UserPromptSubmit` entry from `~/.codex/hooks.json`.
+1. Remove the Rudder `UserPromptSubmit` and `Stop` entries from `~/.claude/settings.json`.
+2. Remove the Rudder `UserPromptSubmit` and `Stop` entries from `~/.codex/hooks.json`.
 3. `rm -rf ~/.rudder`.
 
 ## Development

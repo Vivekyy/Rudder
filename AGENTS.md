@@ -9,12 +9,14 @@ log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 - `src/` — TypeScript sources (run directly via Node's type stripping in dev).
   - `db/` — Drizzle schema/client, generated-migration runner, and prompt queries
     on Drizzle's native `node:sqlite` driver.
-  - `hooks.ts` — Claude/Codex `UserPromptSubmit` capture + learned-rule injection.
+  - `hooks.ts` — Claude/Codex `UserPromptSubmit` capture/applicability injection
+    and `Stop` verification/retry enforcement.
+  - `subagents/` — role-specific applicability, verifier, and writer prompts,
+    parsers, plus the shared CLI runner.
   - `transcript.ts` — bounded, fail-open reading of Claude/Codex JSONL session tails.
-  - `compiler.ts` / `rules.ts` — TRACE-inspired rule compilation, lifecycle,
-    storage, retrieval, and prompt context rendering.
-  - `agent.ts` — shared role-specific `runSubagent`/`resolveAgent` shell-out to
-    `claude`/`codex`.
+  - `compiler.ts` / `rules.ts` — TRACE-inspired writer compilation, lifecycle,
+    runtime hook state storage, retrieval, and prompt context rendering.
+  - `agent.ts` — compatibility re-export for `subagents/runner.ts`.
   - `serve.ts` / `ui.ts` — the `rudder start` compilation daemon and learned-rules dashboard
     (also a PWA: `ui.ts` exports the manifest + service worker, served by `serve.ts`).
   - `icon.ts` — zero-dependency PNG app-icon generator (built-in `node:zlib`).
@@ -26,25 +28,28 @@ log each prompt to a local SQLite DB at `~/.rudder/rudder.db`.
 
 ## Learned-rules pipeline
 
-Both Claude Code and Codex use native `UserPromptSubmit` hooks. The hook records
-the prompt, reads a bounded transcript tail for prior-turn evidence, queues a
-`trace_events` row, and injects already-compiled project/global rules as
-`additionalContext`. Compilation never runs in the hook: `rudder start`
-debounces it out-of-band, and `rudder rules` can run it explicitly.
+Both Claude Code and Codex use native `UserPromptSubmit` and `Stop` hooks. The
+prompt hook records the prompt, reads a bounded transcript tail for prior-turn
+evidence, queues a `trace_events` row, runs the applicability sub-agent over
+active project/global rules, persists the selected rule ids, and injects only
+that selected subset as `additionalContext`.
+
+The Stop hook loads the rules selected at prompt time, filters to rules whose
+`enforced` flag is true, and runs the verifier sub-agent against the final
+assistant response (`last_assistant_message` when available). If the verifier
+finds violations, Rudder returns a Stop-hook block/continuation reason so the
+agent keeps working; retries are capped at three persisted verifier attempts.
 
 The compiler resolves atomic rules with `NEW`/`NOOP`/`UPDATE`. `memory_rules`
-keeps immutable versions and `rule_evidence` preserves provenance. Prompt-time
-retrieval is a local SQLite query; no LLM runs on the hot path.
+keeps immutable versions, an `enforced` flag controls Stop-hook verification,
+and `rule_evidence` preserves provenance.
 
-Each queued TRACE event is processed by three isolated CLI sub-agent roles:
+Out-of-band compilation now runs only the writer sub-agent. `rudder start`
+debounces it after prompt notifications, and `rudder rules` can run it
+explicitly. The writer receives the persisted runtime applicability and verifier
+outputs instead of rerunning those roles speculatively.
 
-- the applicability sub-agent selects relevant active project/global rules;
-- the verifier sub-agent checks whether the prior assistant behavior enforced
-  every selected rule;
-- the writer sub-agent turns durable corrections into `NEW`/`NOOP`/`UPDATE`
-  candidates using the selected rules and verification result.
-
-`agent.ts` starts a fresh Claude or Codex child process for every role and sets
+`subagents/runner.ts` starts a fresh Claude or Codex child process for every role and sets
 `RUDDER_DISABLE=1`/`RUDDER_CHILD_SESSION=1`, so internal prompts never re-enter
 the capture hook. `rudder start` debounces notifications and drains queued TRACE
 events; `rudder rules` can run compilation explicitly.

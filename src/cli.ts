@@ -1,4 +1,9 @@
-import { claudeHook, codexHook } from './hooks.ts';
+import {
+  claudePromptHook,
+  claudeStopHook,
+  codexPromptHook,
+  codexStopHook,
+} from './hooks.ts';
 import { init } from './install.ts';
 import { serve } from './serve.ts';
 import { ensureCompiled } from './compiler.ts';
@@ -75,8 +80,11 @@ export async function main(argv: string[]): Promise<void> {
 
     case 'hook': {
       const which = rest[0];
-      if (which === 'claude') return runHookSafely(() => claudeHook());
-      if (which === 'codex') return runHookSafely(() => codexHook());
+      const event = rest[1] ?? 'prompt';
+      if (which === 'claude' && event === 'prompt') return runHookSafely(() => claudePromptHook());
+      if (which === 'claude' && event === 'stop') return runHookSafely(() => claudeStopHook());
+      if (which === 'codex' && event === 'prompt') return runHookSafely(() => codexPromptHook());
+      if (which === 'codex' && event === 'stop') return runHookSafely(() => codexStopHook());
       process.stderr.write("rudder: hook requires 'claude' or 'codex'\n");
       process.exit(0);
       return;
