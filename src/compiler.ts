@@ -19,7 +19,7 @@ import {
 } from './rules.ts';
 import { capture } from './telemetry.ts';
 
-export const COMPILER_VERSION = 2;
+export const COMPILER_VERSION = 3;
 
 export interface CompilationResult {
   signal: boolean;
@@ -45,7 +45,7 @@ export interface VerificationResult {
 }
 
 const ACTIONS = new Set<RuleAction>(['NEW', 'NOOP', 'UPDATE']);
-const KINDS = new Set<RuleKind>(['preference', 'pitfall', 'friction']);
+const KINDS = new Set<RuleKind>(['preference', 'pitfall']);
 const SCOPES = new Set<RuleScope>(['global', 'project']);
 
 function requiredString(value: unknown, field: string, max = 2_000): string {
@@ -254,7 +254,7 @@ function writerInstruction(
 ): string {
   return `Write durable user corrections as atomic rules for an AI coding assistant.
 
-Decide whether CURRENT USER MESSAGE contains a durable preference, a repeated pitfall/correction, or workflow friction. Ordinary task requests, one-off implementation details, questions, and acknowledgements are not signals.
+Decide whether CURRENT USER MESSAGE contains a durable preference or a repeated pitfall/correction. Ordinary task requests, one-off implementation details, questions, and acknowledgements are not signals.
 
 For each atomic signal, resolve it against APPLICABLE RULES selected by a separate sub-agent:
 - NEW: no existing rule covers it.
@@ -265,7 +265,7 @@ Split a message with multiple independent signals into multiple candidates.
 Rules must be concise directives. "applies_when" must be a positive condition. "does_not_apply_when" must state clear exceptions. Use project scope for repository-specific instructions and global only for preferences that clearly span projects.
 
 Return ONLY one JSON object:
-{"signal":boolean,"reason":"brief","candidates":[{"action":"NEW|NOOP|UPDATE","existing_atomic_id":"id or null","kind":"preference|pitfall|friction","scope":"global|project","rule_text":"directive","applies_when":"positive condition","does_not_apply_when":"exceptions"}]}
+{"signal":boolean,"reason":"brief","candidates":[{"action":"NEW|NOOP|UPDATE","existing_atomic_id":"id or null","kind":"preference|pitfall","scope":"global|project","rule_text":"directive","applies_when":"positive condition","does_not_apply_when":"exceptions"}]}
 
 PROJECT: ${event.project ?? '(unknown)'}
 PRIOR TASK:

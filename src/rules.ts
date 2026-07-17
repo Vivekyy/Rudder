@@ -170,7 +170,7 @@ export function activeRules(projectKey?: string | null): MemoryRule[] {
     .from(memoryRules)
     .where(and(eq(memoryRules.status, 'active'), projectClause))
     .orderBy(
-      sql`CASE ${memoryRules.kind} WHEN 'pitfall' THEN 0 WHEN 'preference' THEN 1 ELSE 2 END`,
+      sql`CASE ${memoryRules.kind} WHEN 'pitfall' THEN 0 ELSE 1 END`,
       asc(memoryRules.atomic_id)
     )
     .all() as MemoryRule[];

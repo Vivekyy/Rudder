@@ -338,6 +338,26 @@ test('compiler parser rejects malformed lifecycle output', async () => {
       ),
     /unknown lifecycle action/
   );
+  assert.throws(
+    () =>
+      parseCompilation(
+        JSON.stringify({
+          signal: true,
+          candidates: [
+            {
+              action: 'NEW',
+              existing_atomic_id: null,
+              kind: 'friction',
+              scope: 'global',
+              rule_text: 'Avoid workflow friction.',
+              applies_when: 'using tools',
+              does_not_apply_when: 'never',
+            },
+          ],
+        })
+      ),
+    /unknown rule kind 'friction'/
+  );
   assert.deepEqual(parseCompilation('{"signal":false,"reason":"ordinary task","candidates":[]}'), {
     signal: false,
     reason: 'ordinary task',
@@ -424,6 +444,8 @@ test('compiler delegates applicability, verification, and writing to isolated ro
       });
     }
     assert.match(instruction, /"enforced":false/);
+    assert.match(instruction, /"kind":"preference\|pitfall"/);
+    assert.doesNotMatch(instruction, /preference\|pitfall\|friction/);
     return JSON.stringify({
       signal: true,
       reason: 'the user reinforced an existing rule',

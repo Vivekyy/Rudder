@@ -55,7 +55,7 @@ export const memoryRules = sqliteTable(
     atomic_id: text('atomic_id').notNull(),
     version: integer('version').notNull(),
     status: text('status', { enum: ['active', 'inactive'] }).notNull(),
-    kind: text('kind', { enum: ['preference', 'pitfall', 'friction'] }).notNull(),
+    kind: text('kind', { enum: ['preference', 'pitfall'] }).notNull(),
     scope: text('scope', { enum: ['global', 'project'] }).notNull(),
     project: text('project'),
     rule_text: text('rule_text').notNull(),

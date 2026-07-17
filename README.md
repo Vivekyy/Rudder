@@ -78,8 +78,8 @@ do?"
   stderr and exits `0` so it never blocks or breaks Claude Code or Codex.
 - **TRACE-inspired memory.** Rudder reads the bounded tail of the local session
   transcript and runs isolated applicability, enforcement-verification, and
-  rule-writer sub-agents out of band. The writer resolves durable preferences,
-  pitfalls, and workflow friction as versioned atomic rules. Up to 12
+  rule-writer sub-agents out of band. The writer resolves durable preferences
+  and repeated pitfalls as versioned atomic rules. Up to 12
   project/global rules are injected on later turns; no LLM runs in the hook.
 
 ## Requirements
