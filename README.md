@@ -76,9 +76,16 @@ test-writing attempt, Rudder reverts all testing code already added or changed i
 the worktree before generation begins.
 
 This reset includes committed, staged, unstaged, and untracked test changes
-relative to the merge base. The current agent identifies test paths from the
-repository's own structure and conventions instead of relying on a particular
-language or test framework.
+relative to the merge base. Before clearing anything, Rudder writes a
+recoverable snapshot of the affected test paths, including the contents of
+untracked files that Git cannot restore from a base revision. The current agent
+identifies test paths from the repository's own structure and conventions
+instead of relying on a particular language or test framework.
+
+Because deleting an untracked file can remove the only copy, Rudder asks the
+user to confirm the inferred path set before clearing untracked tests or any path
+whose classification is ambiguous. If a path is not confirmed as test code, it is
+left in place and surfaced to the user rather than deleted.
 
 Changes to existing tests are highly important for monitoring shifts in intent.
 They show where an established behavior may be changing, not just where more
