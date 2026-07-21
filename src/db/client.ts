@@ -1,10 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath } from 'node:url';
-import { drizzle, type NodeSQLiteDatabase } from 'drizzle-orm/node-sqlite';
-import { migrate } from 'drizzle-orm/node-sqlite/migrator';
+import { drizzle } from 'drizzle-orm/node-sqlite';
 
 /** Root directory for all rudder state. Override with RUDDER_HOME (used by tests). */
 export function rudderHome(): string {
@@ -20,18 +18,23 @@ let _drizzle: RudderDb | null = null;
 
 type RudderDb = ReturnType<typeof drizzle>;
 
-function packageRoot(moduleUrl = import.meta.url): string {
-  const modulePath = fileURLToPath(moduleUrl);
-  const moduleDir = dirname(modulePath);
-  return modulePath.endsWith('.js') ? resolve(moduleDir, '..', '..', '..') : resolve(moduleDir, '..', '..');
-}
-
-export function migrationsFolder(moduleUrl = import.meta.url): string {
-  return join(packageRoot(moduleUrl), 'drizzle');
-}
-
-function applyMigrations(db: NodeSQLiteDatabase): void {
-  migrate(db, { migrationsFolder: migrationsFolder() });
+function ensureBaseSchema(db: DatabaseSync): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS prompts (
+      id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+      ts text NOT NULL,
+      day text NOT NULL,
+      source text NOT NULL,
+      session_id text,
+      cwd text,
+      project text,
+      prompt text NOT NULL,
+      model text,
+      raw text
+    );
+    CREATE INDEX IF NOT EXISTS idx_prompts_day ON prompts (day);
+    CREATE INDEX IF NOT EXISTS idx_prompts_source ON prompts (source);
+  `);
 }
 
 export function openDb(): DatabaseSync {
@@ -39,8 +42,8 @@ export function openDb(): DatabaseSync {
   mkdirSync(rudderHome(), { recursive: true });
   const db = new DatabaseSync(dbPath());
   db.exec('PRAGMA journal_mode = WAL;');
+  ensureBaseSchema(db);
   _drizzle = drizzle({ client: db });
-  applyMigrations(_drizzle);
   _sqlite = db;
   return db;
 }
@@ -57,4 +60,3 @@ export function rudderPort(): number {
   const p = Number(process.env.RUDDER_PORT);
   return Number.isInteger(p) && p > 0 && p < 65536 ? p : 41789;
 }
-

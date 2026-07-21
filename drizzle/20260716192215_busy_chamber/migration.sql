@@ -1,1 +1,0 @@
-DROP TABLE `prompt_tags`;
