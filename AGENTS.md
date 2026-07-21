@@ -1,8 +1,9 @@
 # Working in this repo
 
 Rudder is intentionally an empty application skeleton. Keep runtime source,
-tests, database schema, generated migrations, bundled skills, and frontend code
-out of the repository until the new product design is established.
+tests, generated migrations, bundled skills, and frontend code out of the
+repository until the new product design is established. Retain only base DB and
+telemetry infrastructure.
 
 ## Infrastructure
 

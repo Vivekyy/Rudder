@@ -7,6 +7,7 @@
     "node": ">=23.6.0"
   },
   "files": [
+    "dist",
     "assets",
     "README.md",
     "LICENSE"
@@ -33,9 +34,18 @@
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
-    "typecheck": "node --eval \"\"",
-    "build": "rm -rf dist && mkdir -p dist",
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "node --test",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "drizzle-orm": "^1.0.0-rc.4",
+    "posthog-node": "^5.41.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "drizzle-kit": "^1.0.0-rc.4",
+    "typescript": "^5.7.0"
   }
 }
