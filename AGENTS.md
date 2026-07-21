@@ -1,9 +1,9 @@
 # Working in this repo
 
-Rudder is intentionally an empty application skeleton. Keep runtime source,
-tests, generated migrations, bundled skills, and frontend code out of the
+Rudder is intentionally an empty application skeleton. Keep product runtime
+source, generated migrations, bundled skills, and frontend code out of the
 repository until the new product design is established. Retain only base DB and
-telemetry infrastructure.
+telemetry infrastructure, plus focused validation for that retained baseline.
 
 ## Infrastructure
 
