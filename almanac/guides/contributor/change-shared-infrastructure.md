@@ -44,9 +44,9 @@ If the task is product behavior rather than shared infrastructure, use the produ
 
 ## Check Protected Paths
 
-Read `.agentsignore` before editing. The current protected paths are `README.md`, `LICENSE`, `CLAUDE.md`, and `assets/` [@agentsignore].
+Read `.agentsignore` before editing. The current protected paths are `README.md`, `LICENSE`, `CLAUDE.md`, `assets/`, `.claude/`, `.codex/`, and `.cursor/` [@agentsignore].
 
-Pull requests to `main` run an `Enforce .agentsignore` workflow that detects agent authorship from commit authors, `Co-authored-by` trailers, and the PR author's login [@agentsignore-workflow]. When an agent is detected, the workflow checks changed paths against `.agentsignore` from both the base and head revisions, then fails only when the head revision still protects a changed path [@agentsignore-workflow]. When the head rules allow a path that the base rules protected, it publishes a neutral `agentsignore-policy` check to show that the pull request explicitly relaxed protection. The path-enforcement job is skipped for PRs without detected agent authorship [@agentsignore-workflow]. Treat a protection relaxation as an intentional policy change, not a routine workaround; otherwise move the change to an unprotected path or ask the user for a different route.
+Pull requests to `main` run an `Enforce .agentsignore` workflow that detects agent authorship from commit authors, `Co-authored-by` trailers, and the PR author's login [@agentsignore-workflow]. When an agent is detected, the workflow checks changed paths against `.agentsignore` from both the base and head revisions, then fails only when the head revision still protects a changed path [@agentsignore-workflow]. When the head rules allow a path that the base rules protected, it publishes a neutral `agentsignore-policy` check to show that the pull request explicitly relaxed protection. The path-evaluation step is skipped for PRs without detected agent authorship, so those PRs do not receive an `agentsignore-policy` check [@agentsignore-workflow]. Treat a protection relaxation as an intentional policy change, not a routine workaround; otherwise move the change to an unprotected path or ask the user for a different route.
 
 ## Make The Infrastructure Edit
 
