@@ -34,7 +34,7 @@ This reference lists the npm scripts defined by Rudder's package and the local o
 
 ## Automation Consumers
 
-The Test workflow installs dependencies with `npm ci`, then runs `npm run typecheck`, `npm test`, and `npm run build` in that order [@test-workflow]. The local Claude `/check` command and Codex `check-changed-folders` skill run the same three package checks after enforcing Claude/Codex parity and installing dependencies when `node_modules/` is missing [@claude-check] [@codex-check].
+The Test workflow installs dependencies with `npm ci`, then runs `npm run typecheck`, `npm test`, and `npm run build` in that order [@test-workflow]. The local Claude `/check` command and Codex `check-changed-folders` skill run the same three package checks after enforcing Claude/Codex parity, verifying agent attribution, and installing dependencies when `node_modules/` is missing [@claude-check] [@codex-check].
 
 `prepublishOnly` repeats the same validation set through npm script composition, so the package manifest keeps release validation aligned with local and CI validation [@package-json]. The `build` copy step is also part of the database runtime contract because the compiled database client resolves migrations relative to emitted JavaScript; the decision is recorded in [Generated Drizzle Migrations](../../decisions/database/generated-drizzle-migrations) [@db-client]. The release workflow behavior is covered from the GitHub Actions side in the [GitHub workflows reference](../automation/github-workflows), release preparation is covered in the [prepare package release guide](../../guides/release/prepare-package-release), and the contributor-facing procedure is covered in the [run checks guide](../../guides/contributor/run-checks).
 

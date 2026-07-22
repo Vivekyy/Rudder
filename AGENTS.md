@@ -16,3 +16,10 @@ Run `npm run typecheck`, `npm test`, and `npm run build` before changing shared
 infrastructure.
 
 Use gitmoji in commit messages and PR titles.
+
+Every coding agent that writes code for a pull request must identify itself in
+the pull request's commit history. Use the agent as the commit author or add a
+`Co-authored-by: Agent Name <agent-email>` trailer to at least one commit. The
+name must clearly identify the agent (for example, `Codex Agent`,
+`Claude Agent`, or `Cursor Agent`) because agent-only CI, including
+`.agentsignore` enforcement, uses this metadata.

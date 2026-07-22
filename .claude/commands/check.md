@@ -1,4 +1,5 @@
-Run the package checks for the current branch and enforce Claude/Codex config sync before committing or opening a PR.
+Run the package checks for the current branch, enforce Claude/Codex config sync,
+and verify agent attribution before committing or opening a PR.
 
 ## Steps
 
@@ -24,9 +25,17 @@ Run the package checks for the current branch and enforce Claude/Codex config sy
      - `.claude/commands/check.md` <-> `.codex/skills/check-changed-folders/SKILL.md`
      - `.claude/commands/address-pr-comments.md` <-> `.codex/skills/address-pr-comments/SKILL.md`
 
-3. **Install dependencies if needed.** If `node_modules/` does not exist, run `npm install` first.
+3. **Verify agent attribution.** If a coding agent wrote code included in the
+   branch, inspect `git log origin/main..HEAD` and require every such agent to
+   appear as a commit author or in a `Co-authored-by:` trailer. Missing agent
+   attribution on committed work fails `/check`. If the agent-written work is
+   still uncommitted, report attribution as pending and name the trailer that
+   must be added when committing. Human-only changes are not subject to this
+   check.
 
-4. **Run the package checks** (this is also what `prepublishOnly` runs, so a green `/check` means publishable):
+4. **Install dependencies if needed.** If `node_modules/` does not exist, run `npm install` first.
+
+5. **Run the package checks** (this is also what `prepublishOnly` runs, so a green `/check` means publishable):
 
    ```bash
    npm run typecheck
@@ -34,11 +43,17 @@ Run the package checks for the current branch and enforce Claude/Codex config sy
    npm run build
    ```
 
-5. **Surface and address open PR comments.** If the current branch has an open GitHub PR, run the `/address-pr-comments` flow before finishing — fetch open review comments (Greptile, human reviewers), dedupe, and fix/decline/defer each. If `gh` is unavailable or there is no PR, treat this step as `skipped`. If any comment is acted on, re-run the checks above before reporting.
+6. **Surface and address open PR comments.** If the current branch has an open GitHub PR, run the `/address-pr-comments` flow before finishing — fetch open review comments (Greptile, human reviewers), dedupe, and fix/decline/defer each. If `gh` is unavailable or there is no PR, treat this step as `skipped`. If any comment is acted on, re-run the checks above before reporting.
 
-6. **Report results.** Summarize which checks passed, failed, or were skipped, including dedicated results for Claude/Codex sync and PR comments. For failures, show the key error output and the failing command. Distinguish real failures (type errors, test failures, unaddressed P0/P1 PR comments) from environment issues (missing CLI tools, no PR).
+7. **Report results.** Summarize which checks passed, failed, pending, or were
+   skipped, including dedicated results for Claude/Codex sync, agent
+   attribution, and PR comments. For failures, show the key error output and
+   the failing command. Distinguish real failures (missing agent attribution,
+   type errors, test failures, unaddressed P0/P1 PR comments) from environment
+   issues (missing CLI tools, no PR).
 
 ## Notes
 
 - Default comparison branch is `origin/main` (not local `main`, which may be stale).
 - Claude/Codex parity is a required gate, not an optional reminder.
+- Agent attribution is required only when an agent contributed code.
