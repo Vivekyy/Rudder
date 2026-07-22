@@ -1,0 +1,4 @@
+interface:
+  display_name: "Address PR Comments"
+  short_description: "Review and resolve actionable pull request feedback"
+  default_prompt: "Use $address-pr-comments to fetch and address unresolved review feedback on the current pull request."

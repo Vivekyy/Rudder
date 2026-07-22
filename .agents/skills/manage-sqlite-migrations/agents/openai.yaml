@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage SQLite Migrations"
+  short_description: "Create and verify safe local SQLite migrations"
+  default_prompt: "Use $manage-sqlite-migrations to create and validate this SQLite schema change safely."

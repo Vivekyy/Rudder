@@ -1,0 +1,4 @@
+interface:
+  display_name: "Check"
+  short_description: "Run typecheck, tests, and build for the Rudder package and verify the shared, non-duplicated agent layout."
+  default_prompt: "Identify what changed versus main, verify the .agents-based workflow layout, run the package checks (typecheck, test, build), then summarize pass/fail results."
