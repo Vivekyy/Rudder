@@ -1,0 +1,109 @@
+topics:
+  - slug: architecture
+    title: Architecture
+    description: System structure, runtime flows, and automation boundaries in Rudder.
+    parents: []
+  - slug: automation
+    title: Automation
+    description: CI, release, validation, and agent workflow automation.
+    parents: [architecture]
+  - slug: concepts
+    title: Concepts
+    description: Core vocabulary and mental models for this codebase.
+    parents: []
+  - slug: configuration
+    title: Configuration
+    description: Runtime environment variables and configuration behavior.
+    parents: [runtime]
+  - slug: contributor-workflow
+    title: Contributor Workflow
+    description: Local agent workflows, protected paths, PR feedback, and validation procedures.
+    parents: [automation]
+  - slug: database
+    title: Database
+    description: SQLite-backed generated migrations and runtime schema contracts.
+    parents: [runtime]
+  - slug: decisions
+    title: Decisions
+    description: Durable choices that constrain future repository work.
+    parents: []
+  - slug: github-actions
+    title: GitHub Actions
+    description: GitHub Actions workflows for testing, protected paths, publishing, and release alerts.
+    parents: [automation]
+  - slug: guides
+    title: Guides
+    description: Task-oriented procedures for working in this repository.
+    parents: []
+  - slug: infrastructure
+    title: Infrastructure
+    description: Shared package, TypeScript, automation, runtime foundation, and contributor workflow surfaces.
+    parents: [architecture]
+  - slug: local-state
+    title: Local State
+    description: User-scoped runtime state such as the Rudder home directory, SQLite database, and telemetry identity.
+    parents: [runtime]
+  - slug: package
+    title: Package
+    description: npm package metadata, exports, scripts, publishing, and build outputs.
+    parents: [tooling]
+  - slug: product-intent
+    title: Product Intent
+    description: Proposed Rudder product behavior documented as intent rather than current runtime implementation.
+    parents: [concepts]
+  - slug: prompt-history
+    title: Prompt History
+    description: README-backed coding-agent prompt context for the proposed test-generation workflow.
+    parents: [product-intent]
+  - slug: protected-paths
+    title: Protected Paths
+    description: Agent-protected repository paths and the CI enforcement around them.
+    parents: [contributor-workflow]
+  - slug: pr-review
+    title: PR Review
+    description: Pull request comment collection, deduplication, remediation, and validation workflows.
+    parents: [contributor-workflow]
+  - slug: reference
+    title: Reference
+    description: Exact lookup material for commands, schemas, workflows, and configuration.
+    parents: []
+  - slug: release
+    title: Release
+    description: Package publishing, tag policy, and release alert behavior.
+    parents: [automation]
+  - slug: runtime
+    title: Runtime
+    description: Current executable TypeScript runtime infrastructure.
+    parents: [architecture]
+  - slug: session-branch-tracking
+    title: Session Branch Tracking
+    description: Runtime association between coding-agent session IDs and normalized repository branches.
+    parents: [runtime, database]
+  - slug: sqlite
+    title: SQLite
+    description: SQLite database use, generated migrations, and session-branch persistence.
+    parents: [database]
+  - slug: telemetry
+    title: Telemetry
+    description: PostHog telemetry configuration, identity, and lifecycle behavior.
+    parents: [runtime]
+  - slug: test-generation-intent
+    title: Test Generation Intent
+    description: README-backed proposed test-generation behavior and intent standards.
+    parents: [product-intent]
+  - slug: tooling
+    title: Tooling
+    description: Package, TypeScript, and command tooling for Rudder.
+    parents: [architecture]
+  - slug: typescript
+    title: TypeScript
+    description: TypeScript compiler settings, NodeNext module behavior, and build output.
+    parents: [tooling]
+  - slug: validation
+    title: Validation
+    description: Local and CI checks that decide whether repository changes are publishable.
+    parents: [contributor-workflow, package]
+  - slug: wiki
+    title: Wiki
+    description: CodeAlmanac wiki structure, manual pages, and reference metadata.
+    parents: []
