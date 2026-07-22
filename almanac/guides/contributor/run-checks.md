@@ -19,7 +19,7 @@ sources:
 
 # Run Checks
 
-Run checks when a branch is ready for commit, PR review, or publishing validation. Rudder is a single npm package, so the local check flow is repo-wide: it identifies branch and working-tree changes, enforces Claude/Codex instruction parity, installs dependencies when needed, runs TypeScript, test, and build commands, and surfaces open PR comments before reporting pass, fail, or skip status [@claude-check] [@codex-check]. For background on how this guide fits the automation system, see [Contributor Automation](../../architecture/automation/contributor-automation), [Package Scripts](../../reference/tooling/package-scripts), and [GitHub Workflows](../../reference/automation/github-workflows).
+Run checks when a branch is ready for commit, PR review, or publishing validation. Rudder is a single npm package, so the local check flow is repo-wide: it identifies branch and working-tree changes, enforces Claude/Codex instruction parity, verifies agent attribution, installs dependencies when needed, runs TypeScript, test, and build commands, and surfaces open PR comments before reporting pass, fail, pending, or skip status [@claude-check] [@codex-check]. For background on how this guide fits the automation system, see [Contributor Automation](../../architecture/automation/contributor-automation), [Package Scripts](../../reference/tooling/package-scripts), and [GitHub Workflows](../../reference/automation/github-workflows).
 
 ## Start From The Branch Diff
 
@@ -40,6 +40,10 @@ Before running package commands, compare the Claude-side and Codex-side instruct
 
 When both sides changed, verify intent parity for the mirrored artifacts: `CLAUDE.md` with `AGENTS.md`, `.claude/commands/check.md` with `.codex/skills/check-changed-folders/SKILL.md`, and `.claude/commands/address-pr-comments.md` with `.codex/skills/address-pr-comments/SKILL.md` [@claude-check] [@codex-check]. This is a required gate, not a reminder [@claude-check] [@codex-check].
 
+## Verify Agent Attribution
+
+For committed agent-written work, inspect `git log origin/main..HEAD` and confirm every coding agent appears as a commit author or in a `Co-authored-by` trailer [@claude-check] [@codex-check]. Missing attribution fails the check. When agent-written changes are still uncommitted, report attribution as pending and add the identifying trailer when committing; human-only changes are outside this gate [@claude-check] [@codex-check].
+
 ## Run The Package Commands
 
 Install dependencies if `node_modules/` is missing, then run the package checks in this order [@claude-check] [@codex-check].
@@ -58,4 +62,4 @@ If the current branch has an open GitHub PR, run the [Address PR Comments](addre
 
 ## Report The Result
 
-The final report should include separate status lines for Claude/Codex parity, typecheck, tests, build, and PR comments [@claude-check] [@codex-check]. For failures, include the failing command and the key error output; distinguish real failures such as type errors or unaddressed high-priority comments from environment issues such as missing CLI tools or no PR [@claude-check] [@codex-check].
+The final report should include separate status lines for Claude/Codex parity, agent attribution, typecheck, tests, build, and PR comments [@claude-check] [@codex-check]. For failures, include the failing command and the key error output; distinguish real failures such as missing agent attribution, type errors, test failures, or unaddressed high-priority comments from environment issues such as missing CLI tools or no PR [@claude-check] [@codex-check].

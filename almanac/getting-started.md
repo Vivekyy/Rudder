@@ -40,7 +40,7 @@ Getting started is the entry point for reading Rudder's wiki as a future coding 
 
 Use the implementation-backed pages first when a task touches existing code. [Local State](architecture/runtime/local-state), [Session Branch Store](architecture/runtime/session-branch-store), [Telemetry](architecture/runtime/telemetry), [Package Baseline](architecture/tooling/package-baseline), and [Contributor Automation](architecture/automation/contributor-automation) explain the current runtime and automation surfaces.
 
-Protected files are a separate agent-safety boundary. Start with [Protected Paths](reference/contributor/protected-paths) when a task touches root documentation, assets, or agent instructions, because `.agentsignore` protects `README.md`, `LICENSE`, `CLAUDE.md`, and `assets/`; the pull-request workflow fails changes still protected by the head rules and reports base-only protection matches as explicit relaxations [@agentsignore] [@agentsignore-workflow].
+Protected files are a separate agent-safety boundary. Start with [Protected Paths](reference/contributor/protected-paths) when a task touches root documentation, assets, or agent instructions, because `.agentsignore` protects `README.md`, `LICENSE`, `CLAUDE.md`, and `assets/`; for PRs with detected agent authorship, the pull-request workflow fails changes still protected by the head rules and reports base-only protection matches as explicit relaxations [@agentsignore] [@agentsignore-workflow].
 
 ## Runtime State And Sessions
 

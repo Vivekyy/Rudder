@@ -10,8 +10,45 @@ permissions:
   contents: read
 
 jobs:
+  detect_agent_authorship:
+    name: detect-agent-authorship
+    runs-on: ubuntu-latest
+    outputs:
+      agent_authored: ${{ steps.detect.outputs.agent_authored }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect agent authors and co-authors
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+
+          authors="${RUNNER_TEMP}/pull-request-authors"
+          agent_pattern='(^|[^[:alnum:]])(agent|aider|claude|cline|codex|copilot|cursor|cursoragent|devin|gemini|jules|windsurf)([^[:alnum:]]|$)|@(anthropic|cursor|openai)\.com'
+
+          git log \
+            --format='%an <%ae>%n%(trailers:key=Co-authored-by,valueonly,separator=%x0a)' \
+            "${BASE_SHA}..${HEAD_SHA}" > "${authors}"
+
+          if grep -Eiq "${agent_pattern}" "${authors}" \
+            || grep -Eiq "${agent_pattern}" <<< "${PR_AUTHOR_LOGIN}"; then
+            echo "agent_authored=true" >> "${GITHUB_OUTPUT}"
+            echo "Agent authorship or co-authorship detected."
+          else
+            echo "agent_authored=false" >> "${GITHUB_OUTPUT}"
+            echo "No agent authorship or co-authorship detected."
+          fi
+
   enforce-agentsignore:
     name: enforce-agentsignore
+    needs: detect_agent_authorship
+    if: needs.detect_agent_authorship.outputs.agent_authored == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
