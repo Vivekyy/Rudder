@@ -12,3 +12,6 @@ backwards compatibility, migrating functionality for existing users, etc.
 
 Run `npm run typecheck`, `npm test`, and `npm run build` before changing shared
 infrastructure. Use gitmoji in commit messages and PR titles.
+
+Before editing files, read `.agentsignore` and never modify any files at paths 
+matched by its gitignore-style patterns.
