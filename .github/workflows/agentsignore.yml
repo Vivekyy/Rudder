@@ -10,11 +10,9 @@ permissions:
   contents: read
 
 jobs:
-  detect_agent_authorship:
-    name: detect-agent-authorship
+  enforce-agentsignore:
+    name: enforce-agentsignore
     runs-on: ubuntu-latest
-    outputs:
-      agent_authored: ${{ steps.detect.outputs.agent_authored }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,17 +43,8 @@ jobs:
             echo "No agent authorship or co-authorship detected."
           fi
 
-  enforce-agentsignore:
-    name: enforce-agentsignore
-    needs: detect_agent_authorship
-    if: needs.detect_agent_authorship.outputs.agent_authored == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Evaluate changes to agent-protected paths
+        if: steps.detect.outputs.agent_authored == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
