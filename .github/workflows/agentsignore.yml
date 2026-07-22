@@ -95,5 +95,6 @@ jobs:
             -f "output[summary]=${summary}" \
             --silent
 
-          # The policy check is authoritative; keep this job successful to avoid
-          # reporting the same protected-path violation as a second failure.
+          if [[ "${conclusion}" == "failure" ]]; then
+            exit 1
+          fi
