@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
 
           authors="${RUNNER_TEMP}/pull-request-authors"
-          agent_pattern='(^|[^[:alnum:]])(agent|aider|claude|cline|codex|copilot|cursor|cursoragent|devin|gemini|jules|windsurf)([^[:alnum:]]|$)|@(anthropic|cursor|openai)\.com'
+          agent_pattern='(^|[^[:alnum:]])[[:alnum:]_.-]+(\[bot\]|[[:space:]_-]+(agent|bot|automation))([^[:alnum:]]|$)|(^|[^[:alnum:]])(aider|amazon[[:space:]_-]*q|cline|codex|copilot|cursoragent|devin|gemini|jules|q[[:space:]_-]*developer|windsurf)([^[:alnum:]]|$)'
 
           git log \
             --format='%an <%ae>%n%(trailers:key=Co-authored-by,valueonly,separator=%x0a)' \
@@ -48,7 +48,6 @@ jobs:
   enforce-agentsignore:
     name: enforce-agentsignore
     needs: detect_agent_authorship
-    if: needs.detect_agent_authorship.outputs.agent_authored == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,11 +56,36 @@ jobs:
 
       - name: Evaluate changes to agent-protected paths
         env:
+          AGENT_AUTHORED: ${{ needs.detect_agent_authorship.outputs.agent_authored }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+
+          create_check_run() {
+            gh api --method POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "repos/${GITHUB_REPOSITORY}/check-runs" \
+              -f name="agentsignore-policy" \
+              -f head_sha="${HEAD_SHA}" \
+              -f conclusion="${conclusion}" \
+              -f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+              -f external_id="agentsignore-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+              -f "output[title]=${title}" \
+              -f "output[summary]=${summary}" \
+              --silent
+          }
+
+          if [[ "${AGENT_AUTHORED}" != "true" ]]; then
+            conclusion="success"
+            title="No agent attribution detected"
+            summary="No agent authorship or co-authorship was detected, so .agentsignore enforcement was not required."
+            echo "${summary}"
+            create_check_run
+            exit 0
+          fi
 
           changed_paths="${RUNNER_TEMP}/agentsignore-changed-paths"
           base_protected_paths="${RUNNER_TEMP}/agentsignore-base-protected-paths"
@@ -119,18 +143,7 @@ jobs:
             echo "No agent-protected paths changed."
           fi
 
-          gh api --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "repos/${GITHUB_REPOSITORY}/check-runs" \
-            -f name="agentsignore-policy" \
-            -f head_sha="${HEAD_SHA}" \
-            -f conclusion="${conclusion}" \
-            -f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            -f external_id="agentsignore-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            -f "output[title]=${title}" \
-            -f "output[summary]=${summary}" \
-            --silent
+          create_check_run
 
           if [[ "${conclusion}" == "failure" ]]; then
             exit 1
