@@ -22,12 +22,12 @@ git diff --name-only --cached
 
 2. Verify the centralized agent-instruction layout before running checks:
 
-- `AGENTS.md` is the canonical repository guidance; `CLAUDE.md` delegates to it.
+- `AGENTS.md` is the canonical repository guidance.
 - `.agents/skills/` is the only reusable-workflow source. Do not add command aliases or edit tool-specific symlinks.
+- Ensure that every skill has a corresponding `skills/<skill-name>/agents/openai.yaml` detailing its Codex display name, short description, and default prompt.
 - Confirm the compatibility links resolve correctly:
   - `.claude/skills` -> `../.agents/skills`
   - `.codex/skills` -> `../.agents/skills`
-- Cursor and current Codex discover `.agents/skills/` directly, so do not add a duplicate `.cursor/` configuration directory.
 - If any link is missing or resolves outside `.agents/`, mark the check as failed and report the broken path.
 
 3. Verify agent attribution. If a coding agent wrote code included in the
