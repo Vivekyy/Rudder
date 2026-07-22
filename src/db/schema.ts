@@ -1,25 +1,27 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  primaryKey,
+  sqliteTable,
+  text,
+} from 'drizzle-orm/sqlite-core';
 
-export const prompts = sqliteTable(
-  'prompts',
+export const sessionBranches = sqliteTable(
+  'session_branches',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    ts: text('ts').notNull(),
-    day: text('day').notNull(),
-    source: text('source', { enum: ['claude', 'codex'] }).notNull(),
-    session_id: text('session_id'),
-    cwd: text('cwd'),
-    project: text('project'),
-    prompt: text('prompt').notNull(),
-    model: text('model'),
-    raw: text('raw'),
+    source: text('source').notNull(),
+    sessionId: text('session_id').notNull(),
+    repository: text('repository').notNull(),
+    branch: text('branch').notNull(),
+    observedAt: text('observed_at').notNull(),
   },
   (table) => [
-    index('idx_prompts_day').on(table.day),
-    index('idx_prompts_source').on(table.source),
+    primaryKey({
+      columns: [table.source, table.sessionId, table.repository, table.branch],
+    }),
+    index('idx_session_branches_repository_branch').on(table.repository, table.branch),
   ]
 );
 
 export const schema = {
-  prompts,
+  sessionBranches,
 };

@@ -2,7 +2,9 @@ import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-sqlite';
+import { migrate } from 'drizzle-orm/node-sqlite/migrator';
 
 /** Root directory for all rudder state. Override with RUDDER_HOME (used by tests). */
 export function rudderHome(): string {
@@ -18,32 +20,22 @@ let _drizzle: RudderDb | null = null;
 
 type RudderDb = ReturnType<typeof drizzle>;
 
-function ensureBaseSchema(db: DatabaseSync): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS prompts (
-      id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-      ts text NOT NULL,
-      day text NOT NULL,
-      source text NOT NULL,
-      session_id text,
-      cwd text,
-      project text,
-      prompt text NOT NULL,
-      model text,
-      raw text
-    );
-    CREATE INDEX IF NOT EXISTS idx_prompts_day ON prompts (day);
-    CREATE INDEX IF NOT EXISTS idx_prompts_source ON prompts (source);
-  `);
-}
+const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
 
 export function openDb(): DatabaseSync {
   if (_sqlite) return _sqlite;
   mkdirSync(rudderHome(), { recursive: true });
   const db = new DatabaseSync(dbPath());
   db.exec('PRAGMA journal_mode = WAL;');
-  ensureBaseSchema(db);
-  _drizzle = drizzle({ client: db });
+  db.exec('PRAGMA busy_timeout = 5000;');
+  const orm = drizzle({ client: db });
+  try {
+    migrate(orm, { migrationsFolder });
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+  _drizzle = orm;
   _sqlite = db;
   return db;
 }
@@ -53,6 +45,13 @@ export function rudderDb(): RudderDb {
     openDb();
   }
   return _drizzle!;
+}
+
+/** Close cached database handles. Primarily useful for short-lived processes and tests. */
+export function closeDb(): void {
+  _sqlite?.close();
+  _sqlite = null;
+  _drizzle = null;
 }
 
 /** TCP port the `rudder start` dashboard daemon listens on (override with RUDDER_PORT). */
