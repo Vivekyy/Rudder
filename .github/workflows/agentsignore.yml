@@ -1,4 +1,4 @@
-name: Protected agent paths
+name: Enforce .agentsignore
 
 on:
   pull_request:
@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  agentsignore:
-    name: Enforce .agentsignore
+  enforce-agentsignore:
+    name: enforce-agentsignore
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
