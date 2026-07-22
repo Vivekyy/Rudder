@@ -1,6 +1,6 @@
 ---
 title: "Protected Paths"
-summary: "The protected paths reference lists the current .agentsignore rules and the pull-request workflow that rejects changes matching either base or head rules."
+summary: "The protected paths reference lists the current .agentsignore rules and the pull-request workflow outcomes for head-protected, base-only protected, and unprotected changes."
 topics: [reference, contributor-workflow, automation, protected-paths]
 sources:
   - id: agentsignore
@@ -11,7 +11,7 @@ sources:
     path: .github/workflows/agentsignore.yml
 ---
 
-Agent-protected paths are repository paths listed in `.agentsignore` and rejected by the pull-request enforcement workflow when they change. The current `.agentsignore` protects the root `README.md`, `LICENSE`, `CLAUDE.md`, and the `/assets/` directory [@agentsignore]. CI enforces that rule on pull requests to `main` by checking changed paths against `.agentsignore` rules from both the base and head revisions [@agentsignore-workflow].
+Agent-protected paths are repository paths listed in `.agentsignore` and evaluated by the pull-request enforcement workflow when they change. The current `.agentsignore` protects the root `README.md`, `LICENSE`, `CLAUDE.md`, and the `/assets/` directory [@agentsignore]. CI enforces the policy on pull requests to `main` by checking changed paths against `.agentsignore` rules from both the base and head revisions, then reporting failure, neutral, or success through an `agentsignore-policy` check run [@agentsignore-workflow].
 
 ## Current Rules
 
@@ -22,15 +22,15 @@ Agent-protected paths are repository paths listed in `.agentsignore` and rejecte
 | `CLAUDE.md` | Protects the root Claude instruction handoff file [@agentsignore]. |
 | `/assets/` | Protects the root `assets/` directory and paths beneath it [@agentsignore]. |
 
-These are gitignore-style patterns, and the CI workflow evaluates them with `git check-ignore --no-index` against the changed-path list [@agentsignore-workflow].
+These are gitignore-style patterns, and the CI workflow evaluates them with `git check-ignore --no-index` against the changed-path list for each revision's rules [@agentsignore-workflow].
 
 ## CI Enforcement
 
-The `.github/workflows/agentsignore.yml` workflow runs on `pull_request` events targeting `main` and grants only read access to repository contents [@agentsignore-workflow]. Its job checks out the repository with full history, records changed paths between `github.event.pull_request.base.sha` and `github.event.pull_request.head.sha` using `git diff --name-only --no-renames -z`, and stores those paths in a runner-temporary file [@agentsignore-workflow].
+The `.github/workflows/agentsignore.yml` workflow runs on `pull_request` events targeting `main` and grants `checks: write` plus `contents: read` so it can create a policy check run on the pull request head SHA [@agentsignore-workflow]. Its `enforce-agentsignore` job checks out the repository with full history, records changed paths between `github.event.pull_request.base.sha` and `github.event.pull_request.head.sha` using `git diff --name-only --no-renames -z`, and stores those paths in a runner-temporary file [@agentsignore-workflow].
 
-The workflow evaluates both old and new rule sets. For each of `BASE_SHA` and `HEAD_SHA`, it tries to read `.agentsignore` from that revision with `git show`; missing files are skipped [@agentsignore-workflow]. It then creates a temporary Git repository, copies the revision's rules into `.git/info/exclude`, and runs `git check-ignore --no-index -z --stdin` against the changed-path list [@agentsignore-workflow].
+The workflow evaluates base and head rule sets separately. For each of `BASE_SHA` and `HEAD_SHA`, it tries to read `.agentsignore` from that revision with `git show`; missing files are skipped [@agentsignore-workflow]. It then creates a temporary Git repository, copies the revision's rules into `.git/info/exclude`, runs `git check-ignore --no-index -z --stdin` against the changed-path list, and sorts the matched paths uniquely into revision-specific output files [@agentsignore-workflow].
 
-Matches from both revisions are sorted uniquely. If the protected-path output file is empty, the job prints "No agent-protected paths changed." and exits successfully [@agentsignore-workflow]. If any protected path changed, the job emits an error headed "This pull request changes paths protected by .agentsignore:", prints each matching path, and exits with status `1` [@agentsignore-workflow].
+The outcome is head-first. If any changed path still matches the head revision's `.agentsignore`, the workflow creates an `agentsignore-policy` check run with conclusion `failure`, emits an Actions error headed "This pull request changes paths protected by its .agentsignore:", prints the head-protected paths, and exits with status `1` [@agentsignore-workflow]. If the head rules allow every changed path but the base rules protected at least one of them, the workflow creates the same check run with conclusion `neutral`, emits a notice that `.agentsignore` was relaxed, and exits successfully [@agentsignore-workflow]. If neither revision protects a changed path, the workflow creates a `success` check run, prints "No agent-protected paths changed.", and exits successfully [@agentsignore-workflow].
 
 ## Related Workflow
 

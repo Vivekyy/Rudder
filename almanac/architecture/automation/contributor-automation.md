@@ -26,7 +26,7 @@ sources:
     path: .agentsignore
 ---
 
-Rudder's contributor automation is a set of local and CI gates for a repository that currently has one npm package and mirrored agent workflows [@claude-check] [@codex-check]. The local `/check` command and Codex `check-changed-folders` skill compare the branch with `origin/main`, enforce Claude/Codex instruction parity, run the package checks, and then surface PR comments when a PR exists [@claude-check] [@codex-check]. GitHub Actions repeats the package validation on every branch push and rejects pull requests that touch paths protected by `.agentsignore` [@test-workflow] [@agentsignore-workflow].
+Rudder's contributor automation is a set of local and CI gates for a repository that currently has one npm package and mirrored agent workflows [@claude-check] [@codex-check]. The local `/check` command and Codex `check-changed-folders` skill compare the branch with `origin/main`, enforce Claude/Codex instruction parity, run the package checks, and then surface PR comments when a PR exists [@claude-check] [@codex-check]. GitHub Actions repeats the package validation on every branch push and evaluates `.agentsignore` policy on pull requests, failing head-protected changes while reporting explicit protection relaxations as neutral checks [@test-workflow] [@agentsignore-workflow].
 
 ## Local Check Surface
 
@@ -46,6 +46,6 @@ That remediation flow has its own validation boundary. If it applies any fixes, 
 
 ## Protected Paths
 
-`.agentsignore` protects `README.md`, `LICENSE`, `CLAUDE.md`, and the `assets/` directory from agent-authored PR changes [@agentsignore]. The enforcement workflow runs on pull requests targeting `main`, computes changed paths between the PR base and head SHAs, loads `.agentsignore` rules from both base and head revisions when present, and uses `git check-ignore --no-index` inside a temporary matcher repository to identify protected changes [@agentsignore-workflow].
+`.agentsignore` protects `README.md`, `LICENSE`, `CLAUDE.md`, and the `assets/` directory from agent-authored PR changes [@agentsignore]. The enforcement workflow runs on pull requests targeting `main`, computes changed paths between the PR base and head SHAs, loads `.agentsignore` rules from both base and head revisions when present, and uses `git check-ignore --no-index` inside a temporary matcher repository to identify protected changes for each revision separately [@agentsignore-workflow].
 
-The base-and-head rule check matters because a pull request cannot bypass protection by editing `.agentsignore` in the same branch. If any protected path changed, the workflow emits a GitHub Actions error listing those paths and exits nonzero [@agentsignore-workflow]. The lookup version of this contract belongs in the [protected paths reference](../../reference/contributor/protected-paths).
+The head rule check is authoritative for failure: if a changed path remains protected by the pull request's `.agentsignore`, the workflow emits a GitHub Actions error, creates an `agentsignore-policy` check run with conclusion `failure`, and exits nonzero [@agentsignore-workflow]. Base-only matches mean the pull request explicitly relaxed `.agentsignore`; the workflow reports those paths with a notice and a `neutral` check run instead of failing, while changes protected by neither revision receive a `success` check run [@agentsignore-workflow]. The lookup version of this contract belongs in the [protected paths reference](../../reference/contributor/protected-paths).

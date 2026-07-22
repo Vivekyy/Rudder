@@ -46,7 +46,7 @@ If the task is product behavior rather than shared infrastructure, use the produ
 
 Read `.agentsignore` before editing. The current protected paths are `README.md`, `LICENSE`, `CLAUDE.md`, and `assets/` [@agentsignore].
 
-Pull requests to `main` run an `Enforce .agentsignore` workflow that checks changed paths against `.agentsignore` from both the base and head revisions [@agentsignore-workflow]. The workflow writes the diff path list, runs `git check-ignore --no-index` against both rule sets, and fails the PR if any protected path changed [@agentsignore-workflow]. Do not work around that gate; move the change to an unprotected path or ask the user for a different route.
+Pull requests to `main` run an `Enforce .agentsignore` workflow that checks changed paths against `.agentsignore` from both the base and head revisions [@agentsignore-workflow]. The workflow writes the diff path list, runs `git check-ignore --no-index` against both rule sets, and fails only when the head revision still protects a changed path [@agentsignore-workflow]. When the head rules allow a path that the base rules protected, the workflow publishes a neutral `agentsignore-policy` check to show that the pull request explicitly relaxed protection [@agentsignore-workflow]. Treat that relaxation as an intentional policy change, not a routine workaround; otherwise move the change to an unprotected path or ask the user for a different route.
 
 ## Make The Infrastructure Edit
 

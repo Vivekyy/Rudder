@@ -22,7 +22,7 @@ This reference covers the four GitHub Actions workflows in Rudder: package valid
 | Workflow | File | Trigger | Permissions | Main job |
 | --- | --- | --- | --- | --- |
 | Test | `.github/workflows/test.yml` | Push to any branch and manual `workflow_dispatch` | `contents: read` | `test` [@test-workflow] |
-| Enforce `.agentsignore` | `.github/workflows/agentsignore.yml` | Pull requests targeting `main` | `contents: read` | `enforce-agentsignore` [@agentsignore-workflow] |
+| Enforce `.agentsignore` | `.github/workflows/agentsignore.yml` | Pull requests targeting `main` | `checks: write`, `contents: read` | `enforce-agentsignore` [@agentsignore-workflow] |
 | Publish packages and releases | `.github/workflows/publish.yml` | Push to `main` and manual `workflow_dispatch` | `contents: write`, `id-token: write`, `packages: write` | `publish` [@publish-workflow] |
 | Release alert | `.github/workflows/release-alert.yml` | Pull requests opened, synchronized, or reopened against `main` | `contents: read`, `packages: read`, `pull-requests: write` | `release-alert` [@release-alert] |
 
@@ -32,9 +32,9 @@ The Test workflow runs one `test` job on `ubuntu-latest` [@test-workflow]. The j
 
 ## Enforce `.agentsignore`
 
-The `.agentsignore` enforcement workflow runs one `enforce-agentsignore` job on pull requests to `main` [@agentsignore-workflow]. It checks out the repository with full history, writes changed paths between the PR base and head SHAs to a temporary file, then evaluates those paths against `.agentsignore` rules from both the base and head revisions when each revision has the file [@agentsignore-workflow].
+The `.agentsignore` enforcement workflow runs one `enforce-agentsignore` job on pull requests to `main` and grants `checks: write` so the job can publish an `agentsignore-policy` check run on the PR head SHA [@agentsignore-workflow]. It checks out the repository with full history, writes changed paths between the PR base and head SHAs to a temporary file, then evaluates those paths against `.agentsignore` rules from both the base and head revisions when each revision has the file [@agentsignore-workflow].
 
-The matcher uses a temporary Git repository, copies each revision's rules into `.git/info/exclude`, and runs `git check-ignore --no-index -z --stdin` over the changed path list [@agentsignore-workflow]. If no protected paths match, the job prints `No agent-protected paths changed.` and exits successfully; otherwise it emits an Actions error listing the protected paths and exits with status 1 [@agentsignore-workflow].
+The matcher uses a temporary Git repository, copies each revision's rules into `.git/info/exclude`, and runs `git check-ignore --no-index -z --stdin` over the changed path list, producing separate base and head match files [@agentsignore-workflow]. Head matches are failures: the job emits an Actions error, creates a `failure` check run, lists the paths that remain protected by the PR's `.agentsignore`, and exits with status 1 [@agentsignore-workflow]. Base-only matches are explicit relaxations: when the head rules allow the changed paths but the base rules protected them, the job emits an Actions notice, creates a `neutral` check run, and exits successfully [@agentsignore-workflow]. When neither revision protects a changed path, the job prints `No agent-protected paths changed.`, creates a `success` check run, and exits successfully [@agentsignore-workflow].
 
 ## Publish Packages And Releases
 
