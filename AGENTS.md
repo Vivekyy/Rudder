@@ -1,9 +1,7 @@
 # Working in this repo
 
-Rudder is intentionally an empty application skeleton. Keep runtime source,
-tests, generated migrations, bundled skills, and frontend code out of the
-repository until the new product design is established. Retain only base DB and
-telemetry infrastructure.
+This is an experimental, pre-release product repo. Do not worry about things like
+backwards compatibility, migrating functionality for existing users, etc.
 
 ## Infrastructure
 
