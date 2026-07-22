@@ -1,0 +1,58 @@
+name: Protected agent paths
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  agentsignore:
+    name: Enforce .agentsignore
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject changes to agent-protected paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          changed_paths="${RUNNER_TEMP}/agentsignore-changed-paths"
+          protected_paths="${RUNNER_TEMP}/agentsignore-protected-paths"
+          rules_dir="${RUNNER_TEMP}/agentsignore-rules"
+
+          git diff --name-only --no-renames -z "${BASE_SHA}" "${HEAD_SHA}" > "${changed_paths}"
+          : > "${protected_paths}"
+          mkdir -p "${rules_dir}"
+
+          for revision in "${BASE_SHA}" "${HEAD_SHA}"; do
+            rules_file="${rules_dir}/${revision}"
+            if ! git show "${revision}:.agentsignore" > "${rules_file}" 2>/dev/null; then
+              continue
+            fi
+
+            matcher_dir="$(mktemp -d "${RUNNER_TEMP}/agentsignore-matcher.XXXXXX")"
+            git -C "${matcher_dir}" init --quiet
+            cp "${rules_file}" "${matcher_dir}/.git/info/exclude"
+            git -C "${matcher_dir}" check-ignore --no-index -z --stdin \
+              < "${changed_paths}" >> "${protected_paths}" || true
+          done
+
+          sort -zu "${protected_paths}" -o "${protected_paths}"
+          if [[ ! -s "${protected_paths}" ]]; then
+            echo "No agent-protected paths changed."
+            exit 0
+          fi
+
+          echo "::error::This pull request changes paths protected by .agentsignore:"
+          while IFS= read -r -d '' path; do
+            echo "  ${path}"
+          done < "${protected_paths}"
+          exit 1
