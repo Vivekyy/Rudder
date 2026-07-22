@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
+  "bin": {
+    "rudder-prompt-hook": "./dist/bin/rudder-prompt-hook.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -43,7 +46,7 @@
   "scripts": {
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R drizzle dist/drizzle",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/bin/rudder-prompt-hook.js && cp -R drizzle dist/drizzle",
     "test": "node --test",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },

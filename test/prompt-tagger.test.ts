@@ -5,14 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { closeDb } from '../src/db/client.ts';
+import { normalizeRepository, resolveBranchContext } from '../src/git-context.ts';
 import {
-  branchesForSession,
-  normalizeRepository,
-  recordSessionBranch,
-  resolveBranchContext,
-  sessionsForBranch,
-  tryRecordSessionBranch,
-} from '../src/session-tagger.ts';
+  promptsForBranch,
+  promptsForSession,
+  reconcilePromptBranch,
+  recordPromptBranch,
+} from '../src/prompt-tagger.ts';
 
 let root: string;
 let repo: string;
@@ -23,7 +22,7 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 before(() => {
-  root = mkdtempSync(join(tmpdir(), 'rudder-session-tagger-'));
+  root = mkdtempSync(join(tmpdir(), 'rudder-prompt-tagger-'));
   repo = join(root, 'repo');
   mkdirSync(repo);
   git(repo, 'init', '-b', 'main');
@@ -33,7 +32,6 @@ before(() => {
   writeFileSync(join(repo, 'fixture.txt'), 'fixture\n');
   git(repo, 'add', 'fixture.txt');
   git(repo, 'commit', '-m', 'fixture');
-  git(repo, 'switch', '-c', 'feature/session-list');
 
   originalRudderHome = process.env.RUDDER_HOME;
   process.env.RUDDER_HOME = join(root, 'state');
@@ -67,90 +65,83 @@ test('resolves the repository and branch from nested directories', () => {
 
   assert.deepEqual(resolveBranchContext(nested), {
     repository: 'github.com/rudder-test/example',
-    branch: 'feature/session-list',
+    branch: 'main',
   });
 });
 
-test('records one timestamped row per session and repository branch', () => {
-  recordSessionBranch({
+test('stores actual prompt text on the branch where it was submitted', () => {
+  const row = recordPromptBranch({
     source: 'claude-code',
     sessionId: 'session-1',
+    promptId: 'prompt-1',
+    promptText: 'Add a session list.',
     cwd: repo,
-    observedAt: '2026-07-22T10:00:00.000Z',
-  });
-  recordSessionBranch({
-    source: 'claude-code',
-    sessionId: 'session-1',
-    cwd: repo,
-    observedAt: '2026-07-22T11:00:00.000Z',
-  });
-  recordSessionBranch({
-    source: 'claude-code',
-    sessionId: 'session-1',
-    cwd: repo,
-    observedAt: '2026-07-22T09:00:00.000Z',
+    submittedAt: '2026-07-22T10:00:00.000Z',
   });
 
-  assert.deepEqual(branchesForSession('claude-code', 'session-1'), [
-    {
-      source: 'claude-code',
-      sessionId: 'session-1',
-      repository: 'github.com/rudder-test/example',
-      branch: 'feature/session-list',
-      observedAt: '2026-07-22T09:00:00.000Z',
-    },
-  ]);
+  assert.deepEqual(row, {
+    source: 'claude-code',
+    sessionId: 'session-1',
+    promptId: 'prompt-1',
+    promptText: 'Add a session list.',
+    repository: 'github.com/rudder-test/example',
+    branch: 'main',
+    submittedAt: '2026-07-22T10:00:00.000Z',
+    reconciledAt: null,
+  });
 });
 
-test('returns every session associated with a repository branch', () => {
-  recordSessionBranch({
-    source: 'codex',
-    sessionId: 'session-2',
+test('moves the prompt link when its turn changes branches', () => {
+  git(repo, 'switch', '-c', 'feature/from-prompt');
+  const row = reconcilePromptBranch({
+    source: 'claude-code',
+    sessionId: 'session-1',
+    promptId: 'prompt-1',
     cwd: repo,
-    observedAt: '2026-07-22T12:00:00.000Z',
+    reconciledAt: '2026-07-22T10:05:00.000Z',
   });
-  recordSessionBranch({
-    source: 'cursor',
-    sessionId: 'session-3',
-    cwd: repo,
-    observedAt: '2026-07-22T13:00:00.000Z',
-  });
-  assert.deepEqual(
-    sessionsForBranch(
+
+  assert.equal(row?.branch, 'feature/from-prompt');
+  assert.equal(row?.reconciledAt, '2026-07-22T10:05:00.000Z');
+  assert.deepEqual(promptsForBranch('github.com/rudder-test/example', 'main'), []);
+  assert.equal(
+    promptsForBranch(
       'https://github.com/rudder-test/example.git',
-      'refs/heads/feature/session-list'
-    ).map(
-      ({ source, sessionId }) => `${source}:${sessionId}`
-    ),
-    ['claude-code:session-1', 'codex:session-2', 'cursor:session-3']
+      'refs/heads/feature/from-prompt'
+    )[0]?.promptText,
+    'Add a session list.'
   );
-});
 
-test('does not associate sessions from another branch', () => {
   git(repo, 'switch', 'main');
-  recordSessionBranch({ source: 'codex', sessionId: 'main-session', cwd: repo });
-  git(repo, 'switch', 'feature/session-list');
-
-  assert.ok(
-    sessionsForBranch(
-      'github.com/rudder-test/example',
-      'feature/session-list'
-    ).every(
-      ({ sessionId }) => sessionId !== 'main-session'
-    )
-  );
+  const replayed = recordPromptBranch({
+    source: 'claude-code',
+    sessionId: 'session-1',
+    promptId: 'prompt-1',
+    promptText: 'Add a session list.',
+    cwd: repo,
+    submittedAt: '2026-07-22T10:00:00.000Z',
+  });
+  assert.equal(replayed.branch, 'feature/from-prompt');
+  git(repo, 'switch', 'feature/from-prompt');
 });
 
-test('best-effort capture ignores sessions outside a Git repository', () => {
-  const notes = join(root, 'notes');
-  mkdirSync(notes);
-  const result = tryRecordSessionBranch({
-    source: 'claude',
-    sessionId: 'non-git-session',
-    cwd: notes,
-    observedAt: '2026-07-24T12:00:00.000Z',
+test('falls back to the latest unreconciled session prompt without a provider prompt ID', () => {
+  recordPromptBranch({
+    source: 'claude-code',
+    sessionId: 'legacy-session',
+    promptText: 'Create another branch.',
+    cwd: repo,
+    submittedAt: '2026-07-22T11:00:00.000Z',
   });
 
-  assert.equal(result, null);
-  assert.deepEqual(branchesForSession('claude', 'non-git-session'), []);
+  const row = reconcilePromptBranch({
+    source: 'claude-code',
+    sessionId: 'legacy-session',
+    cwd: repo,
+    reconciledAt: '2026-07-22T11:05:00.000Z',
+  });
+
+  assert.equal(row?.promptText, 'Create another branch.');
+  assert.equal(row?.branch, 'feature/from-prompt');
+  assert.equal(promptsForSession('claude-code', 'legacy-session').length, 1);
 });

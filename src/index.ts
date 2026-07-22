@@ -1,2 +1,4 @@
 export * from './db/index.ts';
-export * from './session-tagger.ts';
+export * from './git-context.ts';
+export * from './prompt-hook.ts';
+export * from './prompt-tagger.ts';

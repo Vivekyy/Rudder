@@ -5,23 +5,27 @@ import {
   text,
 } from 'drizzle-orm/sqlite-core';
 
-export const sessionBranches = sqliteTable(
-  'session_branches',
+export const promptBranches = sqliteTable(
+  'prompt_branches',
   {
     source: text('source').notNull(),
     sessionId: text('session_id').notNull(),
+    promptId: text('prompt_id').notNull(),
+    promptText: text('prompt_text').notNull(),
     repository: text('repository').notNull(),
     branch: text('branch').notNull(),
-    observedAt: text('observed_at').notNull(),
+    submittedAt: text('submitted_at').notNull(),
+    reconciledAt: text('reconciled_at'),
   },
   (table) => [
     primaryKey({
-      columns: [table.source, table.sessionId, table.repository, table.branch],
+      columns: [table.source, table.sessionId, table.promptId],
     }),
-    index('idx_session_branches_repository_branch').on(table.repository, table.branch),
+    index('idx_prompt_branches_repository_branch').on(table.repository, table.branch),
+    index('idx_prompt_branches_session').on(table.source, table.sessionId, table.submittedAt),
   ]
 );
 
 export const schema = {
-  sessionBranches,
+  promptBranches,
 };
