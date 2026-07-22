@@ -1,0 +1,4 @@
+interface:
+  display_name: "Check"
+  short_description: "Run checks and verify agent attribution and the shared workflow layout."
+  default_prompt: "Use $check-changed-folders to verify agent attribution and the .agents-based workflow layout, then run typecheck, tests, and build."

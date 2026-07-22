@@ -1,14 +1,11 @@
 ---
 name: check-changed-folders
-description: Run typecheck, tests, and build for the rudder package on the current branch versus main, enforce Claude/Codex instruction parity, and verify agent attribution. Use when asked to run "/check", to validate a branch before commit/PR, or whenever a user asks to run checks before publishing.
+description: Run typecheck, tests, and build for the rudder package on the current branch versus main, verify the centralized agent-instruction layout, and verify agent attribution. Use when asked to run "/check", to validate a branch before commit/PR, or whenever a user asks to run checks before publishing.
 ---
 
 # Check Changed Folders
 
-Identify what changed on the branch, enforce Claude/Codex instruction parity,
-verify agent attribution, run the package checks, and report pass/fail status
-with actionable failure output. Rudder is a single npm package, so the checks
-are repo-wide rather than per-folder.
+Identify what changed on the branch, verify the centralized agent-instruction layout and agent attribution, run the package checks, and report pass/fail status with actionable failure output. Rudder is a single npm package, so the checks are repo-wide rather than per-folder.
 
 ## Workflow
 
@@ -23,16 +20,15 @@ git diff --name-only --cached
 
    If anything under `src/`, `bin/`, `test/`, or a build/config file (`package.json`, `tsconfig*.json`, `.github/`) changed, the package checks below apply.
 
-2. Enforce Claude/Codex sync before running checks:
+2. Verify the centralized agent-instruction layout before running checks:
 
-- Claude-side paths: `CLAUDE.md`, `.claude/`
-- Codex-side paths: `AGENTS.md`, `.codex/`
-- If any Claude-side path changed, require at least one Codex-side path change in the same diff, and vice versa.
-- If this requirement fails, mark the check as failed and report which side changed without a mirrored update.
-- When both sides changed, verify intent parity for mirrored artifacts:
-  - `CLAUDE.md` <-> `AGENTS.md`
-  - `.claude/commands/check.md` <-> `.codex/skills/check-changed-folders/SKILL.md`
-  - `.claude/commands/address-pr-comments.md` <-> `.codex/skills/address-pr-comments/SKILL.md`
+- `AGENTS.md` is the canonical repository guidance.
+- `.agents/skills/` is the only reusable-workflow source. Do not add command aliases or edit tool-specific symlinks.
+- Ensure that every skill has a corresponding `skills/<skill-name>/agents/openai.yaml` detailing its Codex display name, short description, and default prompt.
+- Confirm the compatibility links resolve correctly:
+  - `.claude/skills` -> `../.agents/skills`
+  - `.codex/skills` -> `../.agents/skills`
+- If any link is missing or resolves outside `.agents/`, mark the check as failed and report the broken path.
 
 3. Verify agent attribution. If a coding agent wrote code included in the
 branch, inspect `git log origin/main..HEAD` and require every such agent to
@@ -56,16 +52,13 @@ npm run build
 7. Report concise results:
 
 - State whether typecheck, tests, and build passed, failed, or were skipped.
-- Include dedicated results for Claude/Codex sync, agent attribution, and PR
-  comments (`passed`, `failed`, `pending`, or `skipped`) and why.
+- Include dedicated results for agent-instruction layout, agent attribution, and PR comments (`passed`, `failed`, `pending`, or `skipped`) and why.
 - For failures, include the key error output and which command failed.
-- Distinguish real failures (missing agent attribution, type errors, test
-  failures, unaddressed P0/P1 PR comments) from environment issues (missing
-  CLI tools, no PR).
+- Distinguish real failures (broken agent links, missing agent attribution, type errors, test failures, unaddressed P0/P1 PR comments) from environment issues (missing CLI tools, no PR).
 
 ## Notes
 
 - Default comparison branch is `origin/main` (not local `main`, which may be stale).
-- Claude/Codex parity is a required gate, not an optional reminder.
+- The `.agents/` layout is a required gate, not an optional reminder.
 - Agent attribution is required only when an agent contributed code.
 - If nothing relevant changed, state that no checks were required.
