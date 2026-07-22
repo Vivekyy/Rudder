@@ -60,10 +60,15 @@ function strippedRepositoryPath(path: string): string {
   return path.replace(/^\/+|\/+$/gu, '').replace(/\.git$/u, '');
 }
 
+function isLocalRepositoryKey(repository: string): boolean {
+  return /^local:[0-9a-f]{64}$/u.test(repository);
+}
+
 /** Normalize common HTTPS, SSH, and SCP-style Git remotes to a stable key. */
 export function normalizeRepository(repository: string): string {
   const value = repository.trim();
   if (!value) throw new TypeError('repository must not be blank');
+  if (isLocalRepositoryKey(value)) return value;
 
   const scp = /^(?:[^@/]+@)?([^:/]+):(.+)$/u.exec(value);
   if (scp && !value.includes('://')) {

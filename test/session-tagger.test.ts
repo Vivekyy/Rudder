@@ -141,6 +141,38 @@ test('does not associate sessions from another branch', () => {
   );
 });
 
+test('returns sessions for local repositories without remotes', () => {
+  const localRepo = join(root, 'local-repo');
+  mkdirSync(localRepo);
+  git(localRepo, 'init', '-b', 'main');
+  git(localRepo, 'config', 'user.name', 'Rudder Tests');
+  git(localRepo, 'config', 'user.email', 'tests@rudder.local');
+  writeFileSync(join(localRepo, 'fixture.txt'), 'fixture\n');
+  git(localRepo, 'add', 'fixture.txt');
+  git(localRepo, 'commit', '-m', 'fixture');
+
+  const { repository, branch } = resolveBranchContext(localRepo);
+  assert.match(repository, /^local:[0-9a-f]{64}$/u);
+  assert.equal(branch, 'main');
+
+  recordSessionBranch({
+    source: 'codex',
+    sessionId: 'local-session',
+    cwd: localRepo,
+    observedAt: '2026-07-23T12:00:00.000Z',
+  });
+
+  assert.deepEqual(sessionsForBranch(repository, branch), [
+    {
+      source: 'codex',
+      sessionId: 'local-session',
+      repository,
+      branch,
+      observedAt: '2026-07-23T12:00:00.000Z',
+    },
+  ]);
+});
+
 test('best-effort capture ignores sessions outside a Git repository', () => {
   const notes = join(root, 'notes');
   mkdirSync(notes);
