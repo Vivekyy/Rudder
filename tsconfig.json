@@ -12,5 +12,9 @@
     "types": ["node"],
     "lib": ["ES2023"]
   },
-  "include": ["bin/**/*.ts", "src/**/*.ts"]
+  "include": [
+    "bin/**/*.ts",
+    "dangerfile.ts",
+    "src/**/*.ts"
+  ]
 }
