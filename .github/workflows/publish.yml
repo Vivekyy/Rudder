@@ -1,10 +1,10 @@
 name: Publish Rudder plugin
 
-# Publishes the repository-root plugin package to npmjs.org, then creates a
-# plugin-specific Git tag and GitHub Release. The first publication uses the
-# NPM_TOKEN secret because npm only allows Trusted Publisher setup after a
-# package exists. After that, configure this workflow (`publish.yml`) as the
-# package's Trusted Publisher and remove the bootstrap secret.
+# Publishes the repository-root plugin package to npmjs.org with Trusted
+# Publishing, then creates a plugin-specific Git tag and GitHub Release. The
+# first package version must be published manually because npm only allows a
+# Trusted Publisher to be configured after the package exists. This workflow
+# never accepts an npm write token.
 on:
   push:
     branches:
@@ -76,10 +76,11 @@ jobs:
           echo "package_exists=${package_exists}" >> "$GITHUB_OUTPUT"
 
           if [[ "${npm_publish}" == "true" && "${package_exists}" == "false" ]]; then
-            echo "bootstrap_publish=true" >> "$GITHUB_OUTPUT"
+            manual_bootstrap_required=true
           else
-            echo "bootstrap_publish=false" >> "$GITHUB_OUTPUT"
+            manual_bootstrap_required=false
           fi
+          echo "manual_bootstrap_required=${manual_bootstrap_required}" >> "$GITHUB_OUTPUT"
 
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
             echo "Tag ${tag} already exists."
@@ -109,25 +110,26 @@ jobs:
             echo "release_needed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Report required manual bootstrap publication
+        if: steps.check.outputs.manual_bootstrap_required == 'true'
+        run: |
+          echo "::warning::@ruddercode/rudder-plugin does not exist on npmjs.org. Publish the first version manually, configure publish.yml as its npm Trusted Publisher, and rerun this workflow."
+          {
+            echo "## Manual npm bootstrap required"
+            echo
+            echo "GitHub Actions will not receive an npm write token or create release artifacts yet."
+            echo "Follow \`docs/releasing.md\`, then rerun this workflow after the package exists."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Trusted Publishers and provenance require npm >= 11.5.1.
-      - if: steps.check.outputs.release_needed == 'true'
+      - if: steps.check.outputs.release_needed == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
         run: npm install --global npm@latest
 
-      - if: steps.check.outputs.release_needed == 'true'
+      - if: steps.check.outputs.release_needed == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
         run: npm ci
 
-      - name: Require credentials for the first npm publication
-        if: steps.check.outputs.bootstrap_publish == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
-            echo "::error::The first @ruddercode/rudder-plugin publication requires the NPM_TOKEN repository secret."
-            exit 1
-          fi
-
       - name: Validate the plugin package
-        if: steps.check.outputs.release_needed == 'true'
+        if: steps.check.outputs.release_needed == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
         run: |
           npm run check:agent-layout
           npm run typecheck
@@ -135,20 +137,18 @@ jobs:
           npm run build
           npm pack --dry-run
 
-      - name: Publish plugin to npmjs.org
-        if: steps.check.outputs.npm_publish == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance --registry=https://registry.npmjs.org
+      - name: Publish plugin to npmjs.org with Trusted Publishing
+        if: steps.check.outputs.npm_publish == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
+        run: npm publish --access public --registry=https://registry.npmjs.org
 
       - name: Tag the plugin release
-        if: steps.check.outputs.tag_create == 'true'
+        if: steps.check.outputs.tag_create == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
         run: |
           git tag "${{ steps.check.outputs.tag }}"
           git push origin "${{ steps.check.outputs.tag }}"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.release_create == 'true'
+        if: steps.check.outputs.release_create == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

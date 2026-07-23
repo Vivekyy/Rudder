@@ -71,9 +71,9 @@ jobs:
           echo "package_exists=${package_exists}" >> "$GITHUB_OUTPUT"
 
           if [[ "${npm_publish}" == "true" && "${package_exists}" == "false" ]]; then
-            echo "bootstrap_publish=true" >> "$GITHUB_OUTPUT"
+            echo "manual_bootstrap_required=true" >> "$GITHUB_OUTPUT"
           else
-            echo "bootstrap_publish=false" >> "$GITHUB_OUTPUT"
+            echo "manual_bootstrap_required=false" >> "$GITHUB_OUTPUT"
           fi
 
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
@@ -105,7 +105,7 @@ jobs:
         env:
           will_release: ${{ steps.check.outputs.will_release }}
           npm_publish: ${{ steps.check.outputs.npm_publish }}
-          bootstrap_publish: ${{ steps.check.outputs.bootstrap_publish }}
+          manual_bootstrap_required: ${{ steps.check.outputs.manual_bootstrap_required }}
           tag_create: ${{ steps.check.outputs.tag_create }}
           release_create: ${{ steps.check.outputs.release_create }}
           version: ${{ steps.check.outputs.version }}
@@ -117,7 +117,7 @@ jobs:
             const {
               will_release,
               npm_publish,
-              bootstrap_publish,
+              manual_bootstrap_required,
               tag_create,
               release_create,
               version,
@@ -125,11 +125,13 @@ jobs:
               tag,
             } = process.env;
             const releaseLines = [
-              ...(npm_publish === 'true'
-                ? [`Publish **\`${name}@${version}\`** to npmjs.org.`]
-                : []),
-              ...(bootstrap_publish === 'true'
-                ? ['Use the `NPM_TOKEN` repository secret for this first publication.']
+              ...(manual_bootstrap_required === 'true'
+                ? [
+                    `Manually publish **\`${name}@${version}\`** to npmjs.org.`,
+                    'Configure `publish.yml` as the package Trusted Publisher, then rerun the workflow.',
+                  ]
+                : npm_publish === 'true'
+                  ? [`Publish **\`${name}@${version}\`** through npm Trusted Publishing.`]
                 : []),
               ...(tag_create === 'true'
                 ? [`Create the plugin tag \`${tag}\`.`]
@@ -141,11 +143,15 @@ jobs:
             const body = will_release === 'true'
               ? [
                   marker,
-                  '## 🔌 Merging this PR will release the Rudder plugin',
+                  manual_bootstrap_required === 'true'
+                    ? '## 🔑 Manual npm bootstrap required'
+                    : '## 🔌 Merging this PR will release the Rudder plugin',
                   '',
                   ...releaseLines,
                   '',
-                  'The release runs through `.github/workflows/publish.yml` after merge.',
+                  manual_bootstrap_required === 'true'
+                    ? 'GitHub Actions will not receive an npm write token or create the tag and GitHub Release until the manual publication is complete. Follow `docs/releasing.md`.'
+                    : 'The release runs through `.github/workflows/publish.yml` after merge.',
                 ].join('\n')
               : [
                   marker,
