@@ -5,7 +5,8 @@ description: Run typecheck, tests, and build for the rudder package on the curre
 
 # Check Changed Folders
 
-Identify what changed on the branch, verify the centralized agent-instruction layout and agent attribution, run the package checks, and report pass/fail status with actionable failure output. Rudder is a single npm package, so the checks are repo-wide rather than per-folder.
+Identify what changed on the branch, verify the centralized agent-instruction layout and agent attribution, run the package checks, and report pass/fail status with actionable failure output.
+Rudder is a single npm package, so the checks are repo-wide rather than per-folder.
 
 ## Workflow
 
@@ -23,19 +24,20 @@ git diff --name-only --cached
 2. Verify the centralized agent-instruction layout before running checks:
 
 - `AGENTS.md` is the canonical repository guidance.
-- `.agents/skills/` is the only reusable-workflow source. Do not add command aliases or edit tool-specific symlinks.
+- `.agents/skills/` is the only reusable-workflow source.
+  Do not add command aliases or edit tool-specific symlinks.
 - Ensure that every skill has a corresponding `skills/<skill-name>/agents/openai.yaml` detailing its Codex display name, short description, and default prompt.
 - Confirm the compatibility links resolve correctly:
   - `.claude/skills` -> `../.agents/skills`
   - `.codex/skills` -> `../.agents/skills`
 - If any link is missing or resolves outside `.agents/`, mark the check as failed and report the broken path.
 
-3. Verify agent attribution. If a coding agent wrote code included in the
-branch, inspect `git log origin/main..HEAD` and require every such agent to
-appear as a commit author or in a `Co-authored-by:` trailer. Missing agent
-attribution on committed work fails the check. If the agent-written work is
-still uncommitted, report attribution as pending and name the trailer that must
-be added when committing. Human-only changes are not subject to this check.
+3. Verify agent attribution.
+   If a coding agent wrote code included in the
+branch, inspect `git log origin/main..HEAD` and require every such agent to appear as a commit author or in a `Co-authored-by:` trailer.
+Missing agent attribution on committed work fails the check.
+If the agent-written work is still uncommitted, report attribution as pending and name the trailer that must be added when committing.
+Human-only changes are not subject to this check.
 
 4. Install dependencies if `node_modules/` does not exist: run `npm install`.
 
@@ -47,7 +49,11 @@ npm test
 npm run build
 ```
 
-6. Surface and address open PR comments. If the current branch has an open GitHub PR, always invoke the `address-pr-comments` skill before finishing. That skill fetches open review comments (Greptile, human reviewers) for the PR, dedupes them, and fixes/declines/defers each one. Only if `gh` is unavailable or there is no PR for the current branch, treat this step as `skipped`. If any comment is acted on, re-run the checks before reporting.
+6. Surface and address open PR comments.
+   If the current branch has an open GitHub PR, always invoke the `address-pr-comments` skill before finishing.
+   That skill fetches open review comments (Greptile, human reviewers) for the PR, dedupes them, and fixes/declines/defers each one.
+   Only if `gh` is unavailable or there is no PR for the current branch, treat this step as `skipped`.
+   If any comment is acted on, re-run the checks before reporting.
 
 7. Report concise results:
 

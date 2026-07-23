@@ -12,13 +12,16 @@ Produce a committed Drizzle migration that succeeds both from an empty database 
 - Treat `src/db/schema.ts` as the declarative schema and committed folders under `drizzle/` as the runtime history.
 - Never run migration experiments against the real database. `openDb()` applies pending migrations automatically, so do not point application code at the real `RUDDER_HOME` while authoring a migration.
 - Never use `drizzle-kit push`; generate a migration file and review its SQL.
-- Treat migrations already present on `origin/main` as immutable. Add a forward migration instead of rewriting published history.
+- Treat migrations already present on `origin/main` as immutable.
+  Add a forward migration instead of rewriting published history.
 - Do not delete data, drop schema objects, or replace the real database unless the user explicitly authorized that destructive outcome.
-- Do not edit `almanac/` during ordinary migration work. Use it as read-only context unless the user invokes a CodeAlmanac maintenance workflow.
+- Do not edit `almanac/` during ordinary migration work.
+  Use it as read-only context unless the user invokes a CodeAlmanac maintenance workflow.
 
 ## Follow the workflow
 
-1. Inspect `.agentsignore`, `git status`, `src/db/schema.ts`, `src/db/client.ts`, `drizzle.config.ts`, the current `drizzle/` history, and migration tests. Search CodeAlmanac for the affected database files or concept when architectural context is relevant.
+1. Inspect `.agentsignore`, `git status`, `src/db/schema.ts`, `src/db/client.ts`, `drizzle.config.ts`, the current `drizzle/` history, and migration tests.
+   Search CodeAlmanac for the affected database files or concept when architectural context is relevant.
 2. Before changing shared database infrastructure, run the repository baseline:
 
    ```bash
@@ -27,18 +30,23 @@ Produce a committed Drizzle migration that succeeds both from an empty database 
    npm run build
    ```
 
-   Install dependencies first when `node_modules/` is absent. Report pre-existing failures before continuing.
+   Install dependencies first when `node_modules/` is absent.
+   Report pre-existing failures before continuing.
 
-3. State the intended schema and data invariants. Classify the change as additive, data-transforming, or destructive. For a destructive change, preserve required data in a new shape before removing the old shape; stop for user approval when data loss was not explicitly requested.
+3. State the intended schema and data invariants.
+   Classify the change as additive, data-transforming, or destructive.
+   For a destructive change, preserve required data in a new shape before removing the old shape; stop for user approval when data loss was not explicitly requested.
 4. Edit `src/db/schema.ts`, then generate a named migration:
 
    ```bash
    npm run db:generate -- --name <short-kebab-name>
    ```
 
-   Resolve Drizzle rename prompts from the requested data semantics. Do not guess that a drop/add pair is a rename.
+   Resolve Drizzle rename prompts from the requested data semantics.
+   Do not guess that a drop/add pair is a rename.
 
-5. Review every generated `migration.sql` and `snapshot.json`. Check especially for:
+5. Review every generated `migration.sql` and `snapshot.json`.
+   Check especially for:
 
    - table rebuilds that fail to copy every retained column or recreate indexes, constraints, and triggers;
    - `NOT NULL` additions without a valid value for existing rows;
@@ -47,7 +55,8 @@ Produce a committed Drizzle migration that succeeds both from an empty database 
    - unintended `DROP TABLE`, `DROP COLUMN`, or `DELETE` statements;
    - schema/data transformations whose result is not represented in `src/db/schema.ts`.
 
-   Use a custom generated migration when a data backfill cannot be expressed by the schema diff. Keep statement breakpoints intact so the runtime migrator reads the file correctly.
+   Use a custom generated migration when a data backfill cannot be expressed by the schema diff.
+   Keep statement breakpoints intact so the runtime migrator reads the file correctly.
 
 6. Run the bundled validator from the repository root:
 
@@ -55,7 +64,9 @@ Produce a committed Drizzle migration that succeeds both from an empty database 
    node .agents/skills/manage-sqlite-migrations/scripts/validate-migrations.mjs
    ```
 
-   The validator always applies the complete migration history to a fresh database. When `RUDDER_HOME/rudder.db` or `~/.rudder/rudder.db` exists, it also creates a consistent `VACUUM INTO` snapshot and applies only pending migrations to that disposable copy. It then reruns the migrator, checks the migration count, runs `PRAGMA quick_check`, and runs `PRAGMA foreign_key_check`.
+   The validator always applies the complete migration history to a fresh database.
+   When `RUDDER_HOME/rudder.db` or `~/.rudder/rudder.db` exists, it also creates a consistent `VACUUM INTO` snapshot and applies only pending migrations to that disposable copy.
+   It then reruns the migrator, checks the migration count, runs `PRAGMA quick_check`, and runs `PRAGMA foreign_key_check`.
 
    Useful options:
 
@@ -70,9 +81,14 @@ Produce a committed Drizzle migration that succeeds both from an empty database 
    node .agents/skills/manage-sqlite-migrations/scripts/validate-migrations.mjs --keep
    ```
 
-7. Add or update tests for the new schema and its data invariants. Update `test/migrations.test.ts` when its expected table set or migration count changes. A successful empty-database migration is necessary but not sufficient for a data-changing migration; exercise representative pre-migration rows and assert their post-migration values.
-8. Run `npm run typecheck`, `npm test`, and `npm run build`. Confirm the build still copies `drizzle/` to `dist/drizzle`, because compiled runtime startup resolves migrations there.
-9. Review `git diff origin/main...` plus local changes. Expect the schema declaration, a new generated migration folder, relevant tests, and any directly affected runtime code. Do not commit generated `dist/` output.
+7. Add or update tests for the new schema and its data invariants.
+   Update `test/migrations.test.ts` when its expected table set or migration count changes.
+   A successful empty-database migration is necessary but not sufficient for a data-changing migration; exercise representative pre-migration rows and assert their post-migration values.
+8. Run `npm run typecheck`, `npm test`, and `npm run build`.
+   Confirm the build still copies `drizzle/` to `dist/drizzle`, because compiled runtime startup resolves migrations there.
+9. Review `git diff origin/main...` plus local changes.
+   Expect the schema declaration, a new generated migration folder, relevant tests, and any directly affected runtime code.
+   Do not commit generated `dist/` output.
 
 ## Recover safely
 
