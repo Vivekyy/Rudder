@@ -42,6 +42,8 @@
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
+    "format:markdown": "rumdl fmt",
+    "format:markdown:check": "rumdl fmt --check",
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R drizzle dist/drizzle",
     "test": "node --test",
@@ -54,6 +56,7 @@
   "devDependencies": {
     "@types/node": "^24",
     "drizzle-kit": "1.0.0-rc.4",
+    "rumdl": "0.2.41",
     "typescript": "^5.7.0"
   }
 }

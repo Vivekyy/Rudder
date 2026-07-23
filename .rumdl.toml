@@ -1,0 +1,8 @@
+[global]
+enable = ["MD013"]
+exclude = ["README.md", "almanac/**"]
+line-length = 80
+
+[MD013]
+reflow = true
+reflow-mode = "sentence-per-line"
