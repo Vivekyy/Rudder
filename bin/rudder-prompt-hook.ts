@@ -1,11 +1,29 @@
 #!/usr/bin/env node
 
+import { join } from 'node:path';
 import { closeDb } from '../src/db/client.ts';
 import { parseAgentPromptSource, recordPromptHookEvent } from '../src/prompt-hook.ts';
+
+type AgentSource = 'claude-code' | 'codex' | 'cursor';
+
+interface HookContext {
+  root?: string;
+  source: AgentSource;
+}
 
 function sourceArgument(args: string[]): string {
   if (args.length === 2 && args[0] === '--source') return args[1]!;
   throw new TypeError('usage: rudder-prompt-hook --source <claude-code|codex|cursor>');
+}
+
+function hookContext(args: string[]): HookContext {
+  if (process.env.PLUGIN_ROOT) {
+    return { root: process.env.PLUGIN_ROOT, source: 'codex' };
+  }
+  if (process.env.CLAUDE_PLUGIN_ROOT) {
+    return { root: process.env.CLAUDE_PLUGIN_ROOT, source: 'claude-code' };
+  }
+  return { source: parseAgentPromptSource(sourceArgument(args)) };
 }
 
 async function readStdin(): Promise<string> {
@@ -17,10 +35,13 @@ async function readStdin(): Promise<string> {
 }
 
 try {
-  const source = parseAgentPromptSource(sourceArgument(process.argv.slice(2)));
+  const context = hookContext(process.argv.slice(2));
+  if (context.root) {
+    process.env.RUDDER_MIGRATIONS_PATH ||= join(context.root, 'dist', 'drizzle');
+  }
   const input = await readStdin();
   const payload: unknown = JSON.parse(input);
-  recordPromptHookEvent(source, payload);
+  recordPromptHookEvent(context.source, payload);
 } catch {
   // Prompt capture is optional metadata. A hook failure must not interrupt the host agent.
 } finally {

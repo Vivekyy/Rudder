@@ -15,7 +15,6 @@
   "include": [
     "bin/**/*.ts",
     "dangerfile.ts",
-    "plugins/rudder/src/**/*.ts",
     "src/**/*.ts"
   ]
 }

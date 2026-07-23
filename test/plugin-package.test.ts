@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { closeDb } from '../src/db/client.ts';
 import { promptsForSession } from '../src/prompt-tagger.ts';
 
-const pluginRoot = fileURLToPath(new URL('../plugins/rudder/', import.meta.url));
+const pluginRoot = fileURLToPath(new URL('../', import.meta.url));
 const pluginHook = join(pluginRoot, 'dist', 'rudder-prompt-hook.mjs');
 
 let root: string;
@@ -56,8 +56,31 @@ test('ships matching Codex and Claude plugin metadata', () => {
   assert.equal(claude.name, codex.name);
   assert.equal(claude.version, codex.version);
   assert.equal(codex.description, claude.description);
+  assert.equal(packageManifest.name, '@ruddercode/rudder-plugin');
+  assert.equal(packageManifest.version, codex.version);
   assert.equal(packageManifest.dependencies, undefined);
+  assert.equal(packageManifest.workspaces, undefined);
+  assert.ok(packageManifest.files.includes('.codex-plugin'));
+  assert.ok(packageManifest.files.includes('.claude-plugin'));
+  assert.ok(packageManifest.files.includes('hooks'));
   assert.ok(packageManifest.files.includes('dist'));
+});
+
+test('releases the root plugin package with plugin-specific artifacts', () => {
+  const publishWorkflow = readFileSync(
+    join(pluginRoot, '.github', 'workflows', 'publish.yml'),
+    'utf8'
+  );
+  const releaseAlert = readFileSync(
+    join(pluginRoot, '.github', 'workflows', 'release-alert.yml'),
+    'utf8'
+  );
+
+  for (const workflow of [publishWorkflow, releaseAlert]) {
+    assert.match(workflow, /@ruddercode\/rudder-plugin/);
+    assert.match(workflow, /rudder-plugin-v/);
+    assert.doesNotMatch(workflow, /rudder-core|npm\.pkg\.github\.com|plugins\/rudder/);
+  }
 });
 
 test('registers prompt submission and stop hooks from the plugin root', () => {
