@@ -75,6 +75,7 @@ test('stores actual prompt text on the branch where it was submitted', () => {
     sessionId: 'session-1',
     promptId: 'prompt-1',
     promptText: 'Add a session list.',
+    previousAgentOutput: 'I can add that next.',
     cwd: repo,
     submittedAt: '2026-07-22T10:00:00.000Z',
   });
@@ -84,6 +85,7 @@ test('stores actual prompt text on the branch where it was submitted', () => {
     sessionId: 'session-1',
     promptId: 'prompt-1',
     promptText: 'Add a session list.',
+    previousAgentOutput: 'I can add that next.',
     repository: 'github.com/rudder-test/example',
     branch: 'main',
     submittedAt: '2026-07-22T10:00:00.000Z',
@@ -118,10 +120,12 @@ test('moves the prompt link when its turn changes branches', () => {
     sessionId: 'session-1',
     promptId: 'prompt-1',
     promptText: 'Add a session list.',
+    previousAgentOutput: 'This later output must not replace the original context.',
     cwd: repo,
     submittedAt: '2026-07-22T10:00:00.000Z',
   });
   assert.equal(replayed.branch, 'feature/from-prompt');
+  assert.equal(replayed.previousAgentOutput, 'I can add that next.');
   git(repo, 'switch', 'feature/from-prompt');
 });
 

@@ -1,0 +1,1 @@
+ALTER TABLE `prompt_branches` ADD `previous_agent_output` text;

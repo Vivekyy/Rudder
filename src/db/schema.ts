@@ -12,6 +12,7 @@ export const promptBranches = sqliteTable(
     sessionId: text('session_id').notNull(),
     promptId: text('prompt_id').notNull(),
     promptText: text('prompt_text').notNull(),
+    previousAgentOutput: text('previous_agent_output'),
     repository: text('repository').notNull(),
     branch: text('branch').notNull(),
     submittedAt: text('submitted_at').notNull(),

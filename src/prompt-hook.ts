@@ -4,6 +4,7 @@ import {
   type PromptBranchRow,
 } from './prompt-tagger.ts';
 import { promptCaptureDisabled } from './prompt-control.ts';
+import { readPreviousAgentOutput } from './transcript.ts';
 
 export const agentPromptSources = ['claude-code', 'codex', 'cursor'] as const;
 
@@ -16,6 +17,7 @@ export interface NormalizedPromptHookPayload {
   sessionId: string;
   promptId: string | null;
   promptText: string | null;
+  transcriptPath: string | null;
   cwd: string;
 }
 
@@ -126,6 +128,10 @@ export function normalizePromptHookPayload(
     sessionId: sessionId(payload),
     promptId: promptId(source, payload),
     promptText: event === 'submit' ? (payload.prompt as string) : null,
+    transcriptPath: optionalNonblankString(
+      payload.transcript_path,
+      'transcript_path'
+    ),
     cwd:
       optionalNonblankString(payload.cwd, 'cwd') ??
       firstWorkspaceRoot(payload) ??
@@ -148,6 +154,9 @@ export function recordPromptHookEvent(
       sessionId: hook.sessionId,
       promptId: hook.promptId ?? undefined,
       promptText: hook.promptText!,
+      previousAgentOutput: hook.transcriptPath
+        ? readPreviousAgentOutput(hook.transcriptPath)
+        : null,
       cwd: hook.cwd,
     });
   }
