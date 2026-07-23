@@ -1,0 +1,34 @@
+{
+  "name": "@ruddercode/rudder-plugin",
+  "version": "0.1.0",
+  "description": "Generate focused unit tests from coding-session intent and worktree changes.",
+  "type": "module",
+  "files": [
+    ".claude-plugin",
+    ".codex-plugin",
+    "dist",
+    "hooks",
+    "package.json"
+  ],
+  "engines": {
+    "node": ">=23.6.0"
+  },
+  "scripts": {
+    "build": "rm -rf dist && esbuild src/rudder-prompt-hook.ts --bundle --platform=node --format=esm --target=node23 --outfile=dist/rudder-prompt-hook.mjs && cp -R ../../drizzle dist/drizzle",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  },
+  "author": "Vivek Yanamadula <vivek@archermoney.com>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/RudderCode/Rudder#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RudderCode/Rudder.git",
+    "directory": "plugins/rudder"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

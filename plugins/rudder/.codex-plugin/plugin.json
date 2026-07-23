@@ -1,0 +1,34 @@
+{
+  "name": "rudder",
+  "version": "0.1.0",
+  "description": "Generate focused unit tests from coding-session intent and worktree changes using your existing coding agent.",
+  "author": {
+    "name": "Vivek Yanamadula",
+    "email": "vivek@archermoney.com",
+    "url": "https://github.com/RudderCode"
+  },
+  "homepage": "https://github.com/RudderCode/Rudder#readme",
+  "repository": "https://github.com/RudderCode/Rudder",
+  "license": "Apache-2.0",
+  "keywords": [
+    "coding-agents",
+    "unit-tests",
+    "test-generation",
+    "prompt-intent",
+    "coverage"
+  ],
+  "interface": {
+    "displayName": "Rudder",
+    "shortDescription": "Generate tests from session intent and code changes.",
+    "longDescription": "Rudder combines the intent captured in your coding session with the current worktree, then guides your existing coding agent through a fresh-slate unit-test workflow. It discovers the repository's native test and coverage tooling, generates focused tests for changed production behavior, and asks concrete follow-up questions until the configured coverage target is met.",
+    "developerName": "RudderCode",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
+    "websiteURL": "https://github.com/RudderCode/Rudder",
+    "defaultPrompt": [
+      "Generate and verify unit tests for this branch's production changes."
+    ]
+  }
+}

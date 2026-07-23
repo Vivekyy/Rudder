@@ -20,7 +20,12 @@ let _drizzle: RudderDb | null = null;
 
 type RudderDb = ReturnType<typeof drizzle>;
 
-const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
+function migrationsFolder(): string {
+  return (
+    process.env.RUDDER_MIGRATIONS_PATH ??
+    fileURLToPath(new URL('../../drizzle', import.meta.url))
+  );
+}
 
 export function openDb(): DatabaseSync {
   if (_sqlite) return _sqlite;
@@ -30,7 +35,7 @@ export function openDb(): DatabaseSync {
   db.exec('PRAGMA busy_timeout = 5000;');
   const orm = drizzle({ client: db });
   try {
-    migrate(orm, { migrationsFolder });
+    migrate(orm, { migrationsFolder: migrationsFolder() });
   } catch (error) {
     db.close();
     throw error;

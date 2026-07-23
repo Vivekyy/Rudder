@@ -1,0 +1,27 @@
+{
+  "description": "Capture submitted prompts and reconcile them with the active Git branch.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/rudder-prompt-hook.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/dist/rudder-prompt-hook.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

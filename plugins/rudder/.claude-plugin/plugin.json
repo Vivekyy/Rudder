@@ -1,0 +1,19 @@
+{
+  "name": "rudder",
+  "version": "0.1.0",
+  "description": "Generate focused unit tests from coding-session intent and worktree changes using your existing coding agent.",
+  "author": {
+    "name": "Vivek Yanamadula",
+    "email": "vivek@archermoney.com"
+  },
+  "homepage": "https://github.com/RudderCode/Rudder#readme",
+  "repository": "https://github.com/RudderCode/Rudder",
+  "license": "Apache-2.0",
+  "keywords": [
+    "coding-agents",
+    "unit-tests",
+    "test-generation",
+    "prompt-intent",
+    "coverage"
+  ]
+}
