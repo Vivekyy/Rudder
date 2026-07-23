@@ -31,10 +31,21 @@ test('applies generated Drizzle migrations to a new database', () => {
     .map((row) => (row as { name: string }).name);
 
   assert.deepEqual(tableNames, ['prompt_branches']);
+  assert.deepEqual(
+    db
+      .prepare('PRAGMA table_info(prompt_branches)')
+      .all()
+      .filter((row) => (row as { name: string }).name === 'previous_agent_output')
+      .map((row) => ({
+        name: (row as { name: string }).name,
+        notnull: (row as { notnull: number }).notnull,
+      })),
+    [{ name: 'previous_agent_output', notnull: 0 }]
+  );
   assert.equal(
     (
       db.prepare('SELECT count(*) AS count FROM __drizzle_migrations').get() as { count: number }
     ).count,
-    2
+    3
   );
 });

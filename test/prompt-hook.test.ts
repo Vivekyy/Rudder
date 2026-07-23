@@ -53,16 +53,113 @@ test('normalizes the prompt key used by each supported agent', () => {
   ] as const;
 
   for (const [source, idField, hookEvent, id] of fixtures) {
-    assert.equal(
-      normalizePromptHookPayload(source, {
-        hook_event_name: hookEvent,
-        session_id: `${source}-session`,
-        [idField]: id,
-        prompt: `Prompt from ${source}`,
-        cwd: repo,
-      }).promptId,
-      id
+    const transcriptPath = join(root, `${source}.jsonl`);
+    const payload = normalizePromptHookPayload(source, {
+      hook_event_name: hookEvent,
+      session_id: `${source}-session`,
+      [idField]: id,
+      prompt: `Prompt from ${source}`,
+      transcript_path: transcriptPath,
+      cwd: repo,
+    });
+
+    assert.equal(payload.promptId, id);
+    assert.equal(payload.transcriptPath, transcriptPath);
+  }
+});
+
+test('stores the latest agent output before each supported agent prompt', () => {
+  const fixtures = [
+    {
+      source: 'claude-code',
+      idField: 'prompt_id',
+      id: 'claude-context-prompt',
+      hookEvent: 'UserPromptSubmit',
+      entries: [
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Older Claude output.' }],
+          },
+        },
+        {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'thinking', thinking: 'private reasoning' },
+              { type: 'text', text: 'Latest Claude output.' },
+            ],
+          },
+        },
+      ],
+      expected: 'Latest Claude output.',
+    },
+    {
+      source: 'codex',
+      idField: 'turn_id',
+      id: 'codex-context-turn',
+      hookEvent: 'UserPromptSubmit',
+      entries: [
+        {
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Latest Codex output.' }],
+          },
+        },
+      ],
+      expected: 'Latest Codex output.',
+    },
+    {
+      source: 'cursor',
+      idField: 'generation_id',
+      id: 'cursor-context-generation',
+      hookEvent: 'beforeSubmitPrompt',
+      entries: [
+        {
+          role: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: 'Latest Cursor output.' },
+              { type: 'tool_use', name: 'Read', input: {} },
+            ],
+          },
+        },
+      ],
+      expected: 'Latest Cursor output.',
+    },
+  ] as const;
+
+  for (const fixture of fixtures) {
+    const transcriptPath = join(root, `${fixture.source}-context.jsonl`);
+    writeFileSync(
+      transcriptPath,
+      [
+        ...fixture.entries.map((entry) => JSON.stringify(entry)),
+        '{"partially_written":',
+        JSON.stringify({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: 'Go ahead.' }],
+          },
+        }),
+      ].join('\n')
     );
+
+    const row = recordPromptHookEvent(fixture.source, {
+      hook_event_name: fixture.hookEvent,
+      session_id: `${fixture.source}-context-session`,
+      [fixture.idField]: fixture.id,
+      prompt: 'Go ahead.',
+      transcript_path: transcriptPath,
+      cwd: repo,
+    });
+
+    assert.equal(row?.previousAgentOutput, fixture.expected);
   }
 });
 
@@ -87,6 +184,7 @@ test('stores a prompt on submit and reconciles it on stop', () => {
   });
 
   assert.equal(row?.promptText, 'Create and switch to a feature branch.');
+  assert.equal(row?.previousAgentOutput, null);
   assert.equal(row?.branch, 'feature/cursor-prompt');
   assert.ok(row?.reconciledAt);
 });
@@ -125,7 +223,9 @@ test('the executable performs both phases without model-visible output', () => {
     }),
   });
 
-  assert.equal(promptsForSession('codex', 'codex-session')[0]?.branch, 'feature/cli-prompt');
+  const storedPrompt = promptsForSession('codex', 'codex-session')[0];
+  assert.equal(storedPrompt?.branch, 'feature/cli-prompt');
+  assert.equal(storedPrompt?.previousAgentOutput, null);
 });
 
 test('the executable ignores unavailable Git context', () => {

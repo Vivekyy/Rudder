@@ -13,6 +13,7 @@ export interface PromptBranchRow {
   sessionId: string;
   promptId: string;
   promptText: string;
+  previousAgentOutput: string | null;
   repository: string;
   branch: string;
   submittedAt: string;
@@ -24,6 +25,7 @@ export interface RecordPromptBranchInput {
   sessionId: string;
   promptId?: string;
   promptText: string;
+  previousAgentOutput?: string | null;
   cwd?: string;
   submittedAt?: string | Date;
 }
@@ -77,6 +79,10 @@ export function recordPromptBranch(input: RecordPromptBranchInput): PromptBranch
   const sessionId = nonblank(input.sessionId, 'sessionId');
   const promptId = optionalNonblank(input.promptId, 'promptId') ?? randomUUID();
   if (!input.promptText.trim()) throw new TypeError('promptText must not be blank');
+  const previousAgentOutput = optionalNonblank(
+    input.previousAgentOutput,
+    'previousAgentOutput'
+  );
   const context = resolveBranchContext(input.cwd);
   const submittedAt = timestamp(input.submittedAt, 'submittedAt');
 
@@ -87,6 +93,7 @@ export function recordPromptBranch(input: RecordPromptBranchInput): PromptBranch
       sessionId,
       promptId,
       promptText: input.promptText,
+      previousAgentOutput,
       repository: context.repository,
       branch: context.branch,
       submittedAt,
@@ -96,6 +103,7 @@ export function recordPromptBranch(input: RecordPromptBranchInput): PromptBranch
       target: [promptBranches.source, promptBranches.sessionId, promptBranches.promptId],
       set: {
         promptText: input.promptText,
+        previousAgentOutput: sql`coalesce(${promptBranches.previousAgentOutput}, ${previousAgentOutput})`,
         submittedAt: sql`min(${promptBranches.submittedAt}, ${submittedAt})`,
       },
     })
