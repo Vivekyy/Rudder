@@ -57,25 +57,6 @@ jobs:
           fi
           echo "npm_publish=${npm_publish}" >> "$GITHUB_OUTPUT"
 
-          if [[ "${npm_publish}" == "false" ]]; then
-            package_exists=true
-          elif package_view_output="$(npm view "${name}" version --registry=https://registry.npmjs.org 2>&1)"; then
-            package_exists=true
-          elif [[ "${package_view_output}" == *"E404"* || "${package_view_output}" == *"404 Not Found"* ]]; then
-            package_exists=false
-          else
-            echo "::error::Could not determine whether the ${name} package exists."
-            printf '%s\n' "${package_view_output}"
-            exit 1
-          fi
-          echo "package_exists=${package_exists}" >> "$GITHUB_OUTPUT"
-
-          if [[ "${npm_publish}" == "true" && "${package_exists}" == "false" ]]; then
-            echo "manual_bootstrap_required=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "manual_bootstrap_required=false" >> "$GITHUB_OUTPUT"
-          fi
-
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
             tag_create=false
           else
@@ -105,7 +86,6 @@ jobs:
         env:
           will_release: ${{ steps.check.outputs.will_release }}
           npm_publish: ${{ steps.check.outputs.npm_publish }}
-          manual_bootstrap_required: ${{ steps.check.outputs.manual_bootstrap_required }}
           tag_create: ${{ steps.check.outputs.tag_create }}
           release_create: ${{ steps.check.outputs.release_create }}
           version: ${{ steps.check.outputs.version }}
@@ -117,7 +97,6 @@ jobs:
             const {
               will_release,
               npm_publish,
-              manual_bootstrap_required,
               tag_create,
               release_create,
               version,
@@ -125,12 +104,8 @@ jobs:
               tag,
             } = process.env;
             const releaseLines = [
-              ...(manual_bootstrap_required === 'true'
-                ? [
-                    `**\`${name}@${version}\`** requires a manual first publication.`,
-                  ]
-                : npm_publish === 'true'
-                  ? [`Publish **\`${name}@${version}\`** through npm Trusted Publishing.`]
+              ...(npm_publish === 'true'
+                ? [`Publish **\`${name}@${version}\`** through npm Trusted Publishing.`]
                 : []),
               ...(tag_create === 'true'
                 ? [`Create the plugin tag \`${tag}\`.`]
@@ -142,15 +117,11 @@ jobs:
             const body = will_release === 'true'
               ? [
                   marker,
-                  manual_bootstrap_required === 'true'
-                    ? '## 🔑 Manual npm bootstrap required'
-                    : '## 🔌 Merging this PR will release the Rudder plugin',
+                  '## 🔌 Merging this PR will release the Rudder plugin',
                   '',
                   ...releaseLines,
                   '',
-                  manual_bootstrap_required === 'true'
-                    ? 'GitHub Actions will not receive an npm write token or create the tag and GitHub Release until the manual publication is complete.'
-                    : 'The release runs through `.github/workflows/publish.yml` after merge.',
+                  'The release runs through `.github/workflows/publish.yml` after merge.',
                 ].join('\n')
               : [
                   marker,

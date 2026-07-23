@@ -1,10 +1,7 @@
 name: Publish Rudder plugin
 
 # Publishes the repository-root plugin package to npmjs.org with Trusted
-# Publishing, then creates a plugin-specific Git tag and GitHub Release. The
-# first package version must be published manually because npm only allows a
-# Trusted Publisher to be configured after the package exists. This workflow
-# never accepts an npm write token.
+# Publishing, then creates a plugin-specific Git tag and GitHub Release.
 on:
   push:
     branches:
@@ -62,26 +59,6 @@ jobs:
           fi
           echo "npm_publish=${npm_publish}" >> "$GITHUB_OUTPUT"
 
-          if [[ "${npm_publish}" == "false" ]]; then
-            package_exists=true
-          elif package_view_output="$(npm view "${name}" version --registry=https://registry.npmjs.org 2>&1)"; then
-            package_exists=true
-          elif [[ "${package_view_output}" == *"E404"* || "${package_view_output}" == *"404 Not Found"* ]]; then
-            package_exists=false
-          else
-            echo "::error::Could not determine whether the ${name} package exists."
-            printf '%s\n' "${package_view_output}"
-            exit 1
-          fi
-          echo "package_exists=${package_exists}" >> "$GITHUB_OUTPUT"
-
-          if [[ "${npm_publish}" == "true" && "${package_exists}" == "false" ]]; then
-            manual_bootstrap_required=true
-          else
-            manual_bootstrap_required=false
-          fi
-          echo "manual_bootstrap_required=${manual_bootstrap_required}" >> "$GITHUB_OUTPUT"
-
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
             echo "Tag ${tag} already exists."
             tag_create=false
@@ -110,25 +87,15 @@ jobs:
             echo "release_needed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Report required manual bootstrap publication
-        if: steps.check.outputs.manual_bootstrap_required == 'true'
-        run: |
-          echo "::warning::@ruddercode/rudder-plugin does not exist on npmjs.org. Manual bootstrap publication is required before release automation can continue."
-          {
-            echo "## Manual npm bootstrap required"
-            echo
-            echo "GitHub Actions will not receive an npm write token or create release artifacts yet."
-          } >> "$GITHUB_STEP_SUMMARY"
-
       # Trusted Publishers and provenance require npm >= 11.5.1.
-      - if: steps.check.outputs.release_needed == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
+      - if: steps.check.outputs.release_needed == 'true'
         run: npm install --global npm@latest
 
-      - if: steps.check.outputs.release_needed == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
+      - if: steps.check.outputs.release_needed == 'true'
         run: npm ci
 
       - name: Validate the plugin package
-        if: steps.check.outputs.release_needed == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
+        if: steps.check.outputs.release_needed == 'true'
         run: |
           npm run check:agent-layout
           npm run typecheck
@@ -137,17 +104,17 @@ jobs:
           npm pack --dry-run
 
       - name: Publish plugin to npmjs.org with Trusted Publishing
-        if: steps.check.outputs.npm_publish == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
+        if: steps.check.outputs.npm_publish == 'true'
         run: npm publish --access public --registry=https://registry.npmjs.org
 
       - name: Tag the plugin release
-        if: steps.check.outputs.tag_create == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
+        if: steps.check.outputs.tag_create == 'true'
         run: |
           git tag "${{ steps.check.outputs.tag }}"
           git push origin "${{ steps.check.outputs.tag }}"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.release_create == 'true' && steps.check.outputs.manual_bootstrap_required == 'false'
+        if: steps.check.outputs.release_create == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

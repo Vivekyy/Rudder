@@ -134,12 +134,10 @@ test('releases the root plugin package with plugin-specific artifacts', () => {
     assert.doesNotMatch(workflow, /rudder-core|npm\.pkg\.github\.com|plugins\/rudder/);
     assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
   }
-  assert.match(publishWorkflow, /manual_bootstrap_required/);
   assert.match(publishWorkflow, /Trusted Publishing/);
-  assert.match(releaseAlert, /Manual npm bootstrap required/);
   assert.doesNotMatch(
     `${publishWorkflow}\n${releaseAlert}`,
-    /docs\/releasing\.md/
+    /docs\/releasing\.md|npm view "\$\{name\}" version/
   );
 });
 
