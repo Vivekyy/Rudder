@@ -1,36 +1,43 @@
 ---
 title: "Protected Paths"
-summary: "The protected paths reference lists the current .agentsignore rules and the pull-request workflow outcomes for head-protected, base-only protected, and unprotected changes."
+summary: "The protected paths reference lists the current Danger agent-guard rules, protected path patterns, inline guard markers, and policy-change warnings."
 topics: [reference, contributor-workflow, automation, protected-paths]
 sources:
-  - id: agentsignore
+  - id: dangerfile
     type: file
-    path: .agentsignore
-  - id: agentsignore-workflow
+    path: dangerfile.ts
+  - id: danger-workflow
     type: file
-    path: .github/workflows/agentsignore.yml
+    path: .github/workflows/danger.yml
 ---
 
-Agent-protected paths are repository paths listed in `.agentsignore` and evaluated by the pull-request enforcement workflow when a pull request has detected agent authorship. The current `.agentsignore` protects the root `README.md`, `LICENSE`, `CLAUDE.md`, and the `/assets/` directory [@agentsignore]. CI detects agent authorship from commit authors, `Co-authored-by` trailers, or the PR author's login; only detected-agent pull requests have their changed paths checked against `.agentsignore` rules and receive an `agentsignore-policy` check run [@agentsignore-workflow].
+Agent-protected paths are repository paths matched by `PROTECTED_PATHS` in `dangerfile.ts` and evaluated by Danger when a pull request has detected agent authorship. The current protected patterns are `README.md`, `LICENSE`, `CLAUDE.md`, `assets/**`, `.claude/**`, `.codex/**`, and `.cursor/**` [@dangerfile]. CI detects agent authorship from the PR author, commit author names and emails, and `Co-authored-by` trailers; when no agent identity is detected, the scheduled Danger check returns before enforcing path or inline guards [@dangerfile].
 
 ## Current Rules
 
 | Pattern | Scope |
 | --- | --- |
-| `README.md` | Protects the root README file [@agentsignore]. |
-| `LICENSE` | Protects the root license file [@agentsignore]. |
-| `CLAUDE.md` | Protects the root Claude instruction handoff file [@agentsignore]. |
-| `/assets/` | Protects the root `assets/` directory and paths beneath it [@agentsignore]. |
+| `README.md` | Protects the root README file [@dangerfile]. |
+| `LICENSE` | Protects the root license file [@dangerfile]. |
+| `CLAUDE.md` | Protects the root Claude instruction handoff file [@dangerfile]. |
+| `assets/**` | Protects root assets and paths beneath them [@dangerfile]. |
+| `.claude/**` | Protects Claude compatibility files and symlinks [@dangerfile]. |
+| `.codex/**` | Protects Codex compatibility files and symlinks [@dangerfile]. |
+| `.cursor/**` | Protects Cursor compatibility files [@dangerfile]. |
 
-These are gitignore-style patterns, and the CI workflow evaluates them with `git check-ignore --no-index` against the changed-path list for each revision's rules [@agentsignore-workflow].
+The matcher uses Node's `matchesGlob()` over changed files collected from Danger's created, modified, and deleted file lists [@dangerfile].
 
 ## CI Enforcement
 
-The `.github/workflows/agentsignore.yml` workflow runs on `pull_request` events targeting `main` and grants `checks: write` plus `contents: read` so it can create a policy check run on the pull request head SHA [@agentsignore-workflow]. Its `detect-agent-authorship` job checks full commit history and trailers between the base and head SHAs, along with the PR author's login. The `enforce-agentsignore` job runs only when that detection reports agent authorship; it then checks out the repository with full history, records changed paths between `github.event.pull_request.base.sha` and `github.event.pull_request.head.sha` using `git diff --name-only --no-renames -z`, and stores those paths in a runner-temporary file [@agentsignore-workflow].
+The `.github/workflows/danger.yml` workflow runs on pull requests targeting `main`, installs Node 24 dependencies, and executes `npm run danger:ci` with `GITHUB_TOKEN` [@danger-workflow]. The Danger script warns when policy files change, including `dangerfile.ts` and `.github/workflows/danger.yml`, so policy edits are explicit review events instead of routine protected-path workarounds [@dangerfile].
 
-The workflow evaluates base and head rule sets separately. For each of `BASE_SHA` and `HEAD_SHA`, it tries to read `.agentsignore` from that revision with `git show`; missing files are skipped [@agentsignore-workflow]. It then creates a temporary Git repository, copies the revision's rules into `.git/info/exclude`, runs `git check-ignore --no-index -z --stdin` against the changed-path list, and sorts the matched paths uniquely into revision-specific output files [@agentsignore-workflow].
+For detected-agent pull requests, a changed file matching `PROTECTED_PATHS` fails with the protected path name and tells maintainers to relax `PROTECTED_PATHS` in a separately reviewed policy change if the edit is intentional [@dangerfile]. This is a direct failure rather than a neutral warning [@dangerfile].
 
-For a detected-agent pull request, the outcome is head-first. If any changed path still matches the head revision's `.agentsignore`, the workflow creates an `agentsignore-policy` check run with conclusion `failure`, emits an Actions error headed "This pull request changes paths protected by its .agentsignore:", prints the head-protected paths, and exits with status `1` [@agentsignore-workflow]. If the head rules allow every changed path but the base rules protected at least one of them, the workflow creates the same check run with conclusion `neutral`, emits a notice that `.agentsignore` was relaxed, and exits successfully [@agentsignore-workflow]. If neither revision protects a changed path, the workflow creates a `success` check run, prints "No agent-protected paths changed.", and exits successfully. For a pull request without detected agent authorship, the path-enforcement job and `agentsignore-policy` check are skipped [@agentsignore-workflow].
+## Inline Guards
+
+Source files can also protect regions with comment-only markers. `agent-guard:off` starts a protected region, and `agent-guard:on` ends it; the marker parser accepts common comment prefixes such as `//`, `#`, `--`, `;`, block-comment prefixes, and HTML comments [@dangerfile]. Nested `off` markers, unmatched `on` markers, and unclosed `off` markers are invalid and fail the PR [@dangerfile].
+
+When an agent-authored PR changes lines inside an inline protected region, Danger fails the file and points at the first protected head line when available [@dangerfile]. Adding or removing guard markers warns reviewers that inline policy changed; removing a marker can also warn how many previously protected deleted lines were exposed [@dangerfile].
 
 ## Related Workflow
 

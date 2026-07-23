@@ -47,14 +47,22 @@ topics:
     title: Package
     description: npm package metadata, exports, scripts, publishing, and build outputs.
     parents: [tooling]
+  - slug: plugin
+    title: Plugin
+    description: Root Rudder plugin package, manifests, hooks, skill files, marketplace metadata, and bundled hook runtime.
+    parents: [package, product-intent]
   - slug: product-intent
     title: Product Intent
     description: Proposed Rudder product behavior documented as intent rather than current runtime implementation.
     parents: [concepts]
+  - slug: prompt-capture
+    title: Prompt Capture
+    description: Local prompt text capture, prompt-to-branch reconciliation, data controls, and prompt-backed skill context.
+    parents: [runtime, database, product-intent]
   - slug: prompt-history
     title: Prompt History
-    description: README-backed coding-agent prompt context for the proposed test-generation workflow.
-    parents: [product-intent]
+    description: Coding-agent prompt text used as local intent context for the Rudder test-generation workflow.
+    parents: [prompt-capture]
   - slug: protected-paths
     title: Protected Paths
     description: Agent-protected repository paths and the CI enforcement around them.
@@ -75,13 +83,9 @@ topics:
     title: Runtime
     description: Current executable TypeScript runtime infrastructure.
     parents: [architecture]
-  - slug: session-branch-tracking
-    title: Session Branch Tracking
-    description: Runtime association between coding-agent session IDs and normalized repository branches.
-    parents: [runtime, database]
   - slug: sqlite
     title: SQLite
-    description: SQLite database use, generated migrations, and session-branch persistence.
+    description: SQLite database use, generated migrations, and prompt capture persistence.
     parents: [database]
   - slug: telemetry
     title: Telemetry

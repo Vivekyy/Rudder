@@ -1,14 +1,14 @@
 ---
 title: "Run Checks"
-summary: "Run checks is the repo-wide validation procedure for branch changes before commit, PR, or publishing."
+summary: "Run checks is the repo-wide validation procedure for branch changes before commit, PR review, or publishing."
 topics: [guides, contributor-workflow, validation]
 sources:
-  - id: claude-check
+  - id: check-skill
     type: file
-    path: .claude/commands/check.md
-  - id: codex-check
+    path: .agents/skills/check-changed-folders/SKILL.md
+  - id: agents-readme
     type: file
-    path: .codex/skills/check-changed-folders/SKILL.md
+    path: .agents/README.md
   - id: package
     type: file
     path: package.json
@@ -19,11 +19,11 @@ sources:
 
 # Run Checks
 
-Run checks when a branch is ready for commit, PR review, or publishing validation. Rudder is a single npm package, so the local check flow is repo-wide: it identifies branch and working-tree changes, enforces Claude/Codex instruction parity, verifies agent attribution, installs dependencies when needed, runs TypeScript, test, and build commands, and surfaces open PR comments before reporting pass, fail, pending, or skip status [@claude-check] [@codex-check]. For background on how this guide fits the automation system, see [Contributor Automation](../../architecture/automation/contributor-automation), [Package Scripts](../../reference/tooling/package-scripts), and [GitHub Workflows](../../reference/automation/github-workflows).
+Run checks when a branch is ready for commit, PR review, or publishing validation. Rudder is one repo-wide plugin package, so the local check flow identifies branch and working-tree changes, verifies the centralized agent-instruction layout, verifies agent attribution, installs dependencies when needed, runs TypeScript, test, and build commands, and surfaces open PR comments before reporting pass, fail, pending, or skip status [@check-skill]. For background on how this guide fits the automation system, see [Contributor Automation](../../architecture/automation/contributor-automation), [Package Scripts](../../reference/tooling/package-scripts), and [GitHub Workflows](../../reference/automation/github-workflows).
 
 ## Start From The Branch Diff
 
-Fetch `origin/main` first, because both the Claude command and Codex skill use `origin/main` rather than local `main` as the default comparison branch [@claude-check] [@codex-check].
+Fetch `origin/main` first, because the check skill uses `origin/main` rather than local `main` as the default comparison branch [@check-skill].
 
 ```bash
 git fetch origin main
@@ -32,21 +32,21 @@ git diff --name-only
 git diff --name-only --cached
 ```
 
-The command docs treat changes under `src/`, `bin/`, `test/`, package and TypeScript config files, and `.github/` as reasons to run the package checks [@claude-check] [@codex-check]. If nothing relevant changed, report that no package checks were required instead of manufacturing a local test run [@codex-check].
+The check skill treats changes under `src/`, `bin/`, `test/`, package and TypeScript config files, and `.github/` as reasons to run the package checks [@check-skill]. If nothing relevant changed, report that no package checks were required instead of manufacturing a local test run [@check-skill].
 
-## Check Agent Instruction Parity
+## Check Agent Instruction Layout
 
-Before running package commands, compare the Claude-side and Codex-side instruction files. Claude-side paths are `CLAUDE.md` and `.claude/`; Codex-side paths are `AGENTS.md` and `.codex/` [@claude-check] [@codex-check]. If either side changed without the other side changing in the same diff, the check fails and the report must name the side that lacks a mirrored update [@claude-check] [@codex-check].
+Before running package commands, verify the centralized agent-instruction layout. `AGENTS.md` is the canonical repository guidance, `.agents/skills/` is the only reusable-workflow source, each shared skill needs `skills/<skill-name>/agents/openai.yaml`, and `.claude/skills` plus `.codex/skills` must resolve to `.agents/skills` [@agents-readme] [@check-skill].
 
-When both sides changed, verify intent parity for the mirrored artifacts: `CLAUDE.md` with `AGENTS.md`, `.claude/commands/check.md` with `.codex/skills/check-changed-folders/SKILL.md`, and `.claude/commands/address-pr-comments.md` with `.codex/skills/address-pr-comments/SKILL.md` [@claude-check] [@codex-check]. This is a required gate, not a reminder [@claude-check] [@codex-check].
+The package script `check:agent-layout` enforces the symlinks, verifies that `.claude/commands` does not exist, and checks that `CLAUDE.md` contains the `@AGENTS.md` handoff [@package]. If a link is missing or resolves outside `.agents/`, mark the check as failed and report the broken path [@check-skill].
 
 ## Verify Agent Attribution
 
-For committed agent-written work, inspect `git log origin/main..HEAD` and confirm every coding agent appears as a commit author or in a `Co-authored-by` trailer [@claude-check] [@codex-check]. Missing attribution fails the check. When agent-written changes are still uncommitted, report attribution as pending and add the identifying trailer when committing; human-only changes are outside this gate [@claude-check] [@codex-check].
+For committed agent-written work, inspect `git log origin/main..HEAD` and confirm every coding agent appears as a commit author or in a `Co-authored-by` trailer [@check-skill]. Missing attribution fails the check. When agent-written changes are still uncommitted, report attribution as pending and add the identifying trailer when committing; human-only changes are outside this gate [@check-skill].
 
 ## Run The Package Commands
 
-Install dependencies if `node_modules/` is missing, then run the package checks in this order [@claude-check] [@codex-check].
+Install dependencies if `node_modules/` is missing, then run the package checks in this order [@check-skill].
 
 ```bash
 npm run typecheck
@@ -54,12 +54,12 @@ npm test
 npm run build
 ```
 
-The package manifest defines `typecheck` as `tsc --noEmit`, `test` as `node --test`, and `build` as `rm -rf dist && tsc -p tsconfig.build.json` [@package]. Its `prepublishOnly` script runs the same three commands, so a green local check is also the package's publishability gate [@package]. The CI test workflow uses Node 24, runs `npm ci`, and then runs the same typecheck, test, and build sequence on every pushed branch and on manual dispatch [@test-workflow].
+The package manifest defines `typecheck` as `tsc --noEmit`, `test` as `node --test`, and `build` as the esbuild prompt-hook bundle plus `drizzle/` copy [@package]. The CI test workflow uses Node 24, runs `npm ci`, checks agent layout and Markdown formatting, and then runs the same typecheck, test, and build sequence on every pushed branch and on manual dispatch [@test-workflow].
 
 ## Handle PR Comments
 
-If the current branch has an open GitHub PR, run the [Address PR Comments](address-pr-comments) flow before finishing [@claude-check] [@codex-check]. If the GitHub CLI is unavailable or no PR exists, record that step as skipped rather than failed [@claude-check] [@codex-check]. If any comment leads to a fix, rerun the package commands before reporting results [@claude-check] [@codex-check].
+If the current branch has an open GitHub PR, run the [Address PR Comments](address-pr-comments) flow before finishing [@check-skill]. If the GitHub CLI is unavailable or no PR exists, record that step as skipped rather than failed [@check-skill]. If any comment leads to a fix, rerun the package commands before reporting results [@check-skill].
 
 ## Report The Result
 
-The final report should include separate status lines for Claude/Codex parity, agent attribution, typecheck, tests, build, and PR comments [@claude-check] [@codex-check]. For failures, include the failing command and the key error output; distinguish real failures such as missing agent attribution, type errors, test failures, or unaddressed high-priority comments from environment issues such as missing CLI tools or no PR [@claude-check] [@codex-check].
+The final report should include separate status lines for agent-instruction layout, agent attribution, typecheck, tests, build, and PR comments [@check-skill]. For failures, include the failing command and the key error output; distinguish real failures such as broken agent links, missing agent attribution, type errors, test failures, or unaddressed high-priority comments from environment issues such as missing CLI tools or no PR [@check-skill].
