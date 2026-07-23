@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
+  "bin": {
+    "rudder-prompt-hook": "./dist/bin/rudder-prompt-hook.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -47,7 +50,7 @@
     "danger:ci": "danger ci --failOnErrors",
     "check:agent-layout": "test -L .claude/skills && test -L .codex/skills && test .claude/skills -ef .agents/skills && test .codex/skills -ef .agents/skills && test ! -e .claude/commands && grep -Fxq '@AGENTS.md' CLAUDE.md",
     "typecheck": "tsc --noEmit",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R drizzle dist/drizzle",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/bin/rudder-prompt-hook.js && cp -R drizzle dist/drizzle",
     "test": "node --test",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
