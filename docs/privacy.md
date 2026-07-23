@@ -19,8 +19,25 @@ Setting `RUDDER_HOME` changes that location.
 ## Data use and sharing
 
 Rudder uses stored records only as local context for its installed workflow.
-The current plugin does not transmit captured prompts to RudderCode.
-It does not sell or share them with third parties.
+The plugin does not transmit captured prompts or previous agent output to RudderCode.
+
+Published builds can embed a PostHog project token.
+When they do, Rudder sends pseudonymous operational telemetry.
+Success events include the coding-agent source.
+They also report whether previous agent output was available.
+Success events exclude prompt text, previous output, and coding-session IDs.
+They also exclude repositories, branches, and local paths.
+Failure diagnostics may include the error type, message, and stack trace.
+Those diagnostics can contain local file paths.
+
+Telemetry uses a random installation identifier stored in `~/.rudder/identity.json`.
+PostHog creates a person profile keyed by that random identifier.
+Rudder does not attach a name, email address, or coding-session identifier.
+Setting `RUDDER_HOME` changes that location.
+Set `DO_NOT_TRACK=1` to disable telemetry.
+Builds without an embedded project token remain telemetry-disabled by default.
+
+Rudder does not sell telemetry or stored records.
 
 The user's coding agent may process prompts when the user invokes Rudder.
 That processing remains subject to the user's agent-provider agreement.

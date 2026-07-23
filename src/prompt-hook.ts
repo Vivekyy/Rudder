@@ -4,6 +4,7 @@ import {
   type PromptBranchRow,
 } from './prompt-tagger.ts';
 import { promptCaptureDisabled } from './prompt-control.ts';
+import { capture } from './telemetry.ts';
 import { readPreviousAgentOutput } from './transcript.ts';
 
 export const agentPromptSources = ['claude-code', 'codex', 'cursor'] as const;
@@ -25,6 +26,17 @@ export class PromptHookPayloadError extends TypeError {
   constructor(message: string) {
     super(`Invalid coding-agent hook payload: ${message}`);
     this.name = 'PromptHookPayloadError';
+  }
+}
+
+function captureHookEvent(
+  event: string,
+  properties: Record<string, unknown>
+): void {
+  try {
+    capture(event, properties);
+  } catch {
+    // Telemetry is best-effort and must not change prompt hook behavior.
   }
 }
 
@@ -149,7 +161,7 @@ export function recordPromptHookEvent(
 
   const hook = normalizePromptHookPayload(source, payload, fallbackCwd);
   if (hook.event === 'submit') {
-    return recordPromptBranch({
+    const row = recordPromptBranch({
       source: hook.source,
       sessionId: hook.sessionId,
       promptId: hook.promptId ?? undefined,
@@ -159,6 +171,11 @@ export function recordPromptHookEvent(
         : null,
       cwd: hook.cwd,
     });
+    captureHookEvent('prompt recorded', {
+      source: hook.source,
+      has_previous_agent_output: row.previousAgentOutput !== null,
+    });
+    return row;
   }
 
   const branchInput = {
@@ -167,5 +184,9 @@ export function recordPromptHookEvent(
     promptId: hook.promptId,
     cwd: hook.cwd,
   };
-  return reconcilePromptBranch(branchInput);
+  const row = reconcilePromptBranch(branchInput);
+  if (row) {
+    captureHookEvent('prompt reconciled', { source: hook.source });
+  }
+  return row;
 }

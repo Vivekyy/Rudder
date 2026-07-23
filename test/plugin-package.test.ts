@@ -135,6 +135,15 @@ test('releases the root plugin package with plugin-specific artifacts', () => {
     assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/);
   }
   assert.match(publishWorkflow, /Trusted Publishing/);
+  assert.match(
+    publishWorkflow,
+    /POSTHOG_PROJECT_TOKEN: \$\{\{ secrets\.POSTHOG_PROJECT_TOKEN \}\}/
+  );
+  assert.match(
+    publishWorkflow,
+    /POSTHOG_HOST: \$\{\{ vars\.POSTHOG_HOST \}\}/
+  );
+  assert.match(publishWorkflow, /src\/telemetry-build-config\.ts/);
   assert.doesNotMatch(
     `${publishWorkflow}\n${releaseAlert}`,
     /docs\/releasing\.md|npm view "\$\{name\}" version/
