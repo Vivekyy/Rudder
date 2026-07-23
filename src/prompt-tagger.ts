@@ -36,8 +36,6 @@ export interface ReconcilePromptBranchInput {
   reconciledAt?: string | Date;
 }
 
-export type ObservePromptBranchInput = Omit<ReconcilePromptBranchInput, 'reconciledAt'>;
-
 function timestamp(value: string | Date | undefined, field: string): string {
   const date = value instanceof Date ? value : value === undefined ? new Date() : new Date(value);
   if (Number.isNaN(date.valueOf())) throw new TypeError(`${field} must be a valid date`);
@@ -122,8 +120,7 @@ function latestUnreconciledPrompt(source: string, sessionId: string): PromptBran
 }
 
 function updatePromptBranch(
-  input: ReconcilePromptBranchInput,
-  finalize: boolean
+  input: ReconcilePromptBranchInput
 ): PromptBranchRow | null {
   const source = nonblank(input.source, 'source');
   const sessionId = nonblank(input.sessionId, 'sessionId');
@@ -137,18 +134,11 @@ function updatePromptBranch(
 
   rudderDb()
     .update(promptBranches)
-    .set(
-      finalize
-        ? {
-            repository: context.repository,
-            branch: context.branch,
-            reconciledAt: timestamp(input.reconciledAt, 'reconciledAt'),
-          }
-        : {
-            repository: context.repository,
-            branch: context.branch,
-          }
-    )
+    .set({
+      repository: context.repository,
+      branch: context.branch,
+      reconciledAt: timestamp(input.reconciledAt, 'reconciledAt'),
+    })
     .where(
       and(
         eq(promptBranches.source, target.source),
@@ -161,16 +151,11 @@ function updatePromptBranch(
   return exactPrompt(target.source, target.sessionId, target.promptId);
 }
 
-/** Update an open prompt after a tool call without marking its turn complete. */
-export function observePromptBranch(input: ObservePromptBranchInput): PromptBranchRow | null {
-  return updatePromptBranch(input, false);
-}
-
 /** Update a submitted prompt to the branch checked out after its agent turn. */
 export function reconcilePromptBranch(
   input: ReconcilePromptBranchInput
 ): PromptBranchRow | null {
-  return updatePromptBranch(input, true);
+  return updatePromptBranch(input);
 }
 
 export function promptsForSession(source: string, sessionId: string): PromptBranchRow[] {

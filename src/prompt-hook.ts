@@ -1,5 +1,4 @@
 import {
-  observePromptBranch,
   reconcilePromptBranch,
   recordPromptBranch,
   type PromptBranchRow,
@@ -8,7 +7,7 @@ import {
 export const agentPromptSources = ['claude-code', 'codex', 'cursor'] as const;
 
 export type AgentPromptSource = (typeof agentPromptSources)[number];
-export type PromptHookEvent = 'submit' | 'observe' | 'reconcile';
+export type PromptHookEvent = 'submit' | 'reconcile';
 
 export interface NormalizedPromptHookPayload {
   source: AgentPromptSource;
@@ -93,9 +92,6 @@ function hookEvent(payload: Record<string, unknown>): PromptHookEvent {
     case 'userpromptsubmit':
     case 'beforesubmitprompt':
       return 'submit';
-    case 'posttooluse':
-    case 'posttoolusefailure':
-      return 'observe';
     case 'stop':
       return 'reconcile';
     default:
@@ -159,7 +155,5 @@ export function recordPromptHookEvent(
     promptId: hook.promptId,
     cwd: hook.cwd,
   };
-  return hook.event === 'observe'
-    ? observePromptBranch(branchInput)
-    : reconcilePromptBranch(branchInput);
+  return reconcilePromptBranch(branchInput);
 }

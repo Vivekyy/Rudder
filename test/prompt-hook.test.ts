@@ -78,16 +78,6 @@ test('stores a prompt on submit and reconciles it on stop', () => {
 
   git(repo, 'switch', '-c', 'feature/cursor-prompt');
 
-  const observed = recordPromptHookEvent('cursor', {
-    hook_event_name: 'postToolUse',
-    conversation_id: 'cursor-session',
-    generation_id: 'cursor-generation',
-    workspace_roots: [repo],
-  });
-
-  assert.equal(observed?.branch, 'feature/cursor-prompt');
-  assert.equal(observed?.reconciledAt, null);
-
   const row = recordPromptHookEvent('cursor', {
     hook_event_name: 'stop',
     conversation_id: 'cursor-session',
