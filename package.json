@@ -45,6 +45,7 @@
     "format:markdown": "rumdl fmt",
     "format:markdown:check": "rumdl fmt --check",
     "danger:ci": "danger ci --failOnErrors",
+    "check:agent-layout": "test -L .claude/skills && test -L .codex/skills && test .claude/skills -ef .agents/skills && test .codex/skills -ef .agents/skills && test ! -e .claude/commands && grep -Fxq '@AGENTS.md' CLAUDE.md",
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R drizzle dist/drizzle",
     "test": "node --test",
