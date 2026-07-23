@@ -1,10 +1,10 @@
 {
   "name": "@ruddercode/rudder-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Generate focused unit tests from coding-session intent and worktree changes.",
   "type": "module",
   "engines": {
-    "node": ">=23.6.0"
+    "node": ">=24.0.0"
   },
   "files": [
     ".claude-plugin",
@@ -45,7 +45,7 @@
     "danger:ci": "danger ci --failOnErrors",
     "check:agent-layout": "test -L .claude/skills && test -L .codex/skills && test .claude/skills -ef .agents/skills && test .codex/skills -ef .agents/skills && test ! -e .claude/commands && grep -Fxq '@AGENTS.md' CLAUDE.md",
     "typecheck": "tsc --noEmit",
-    "build": "rm -rf dist && esbuild bin/rudder-prompt-hook.ts --bundle --platform=node --format=esm --target=node23 --outfile=dist/rudder-prompt-hook.mjs && cp -R drizzle dist/drizzle",
+    "build": "rm -rf dist && esbuild bin/rudder-prompt-hook.ts --bundle --platform=node --format=esm --target=node24 --outfile=dist/rudder-prompt-hook.mjs && cp -R drizzle dist/drizzle",
     "pretest": "npm run build",
     "test": "node --test",
     "prepack": "npm run build",

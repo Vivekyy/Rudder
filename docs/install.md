@@ -5,7 +5,7 @@ The marketplace downloads `@ruddercode/rudder-plugin` from npm.
 
 ## Requirements
 
-- Node.js 23.6 or newer
+- Node.js 24 or newer
 - npm available on `PATH`
 - Git available on `PATH`
 - A current Claude Code or Codex installation with plugin support
