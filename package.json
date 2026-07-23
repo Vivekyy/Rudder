@@ -9,8 +9,11 @@
   "files": [
     ".claude-plugin",
     ".codex-plugin",
+    "assets",
     "dist",
+    "docs",
     "hooks",
+    "skills",
     "LICENSE"
   ],
   "keywords": [
@@ -27,7 +30,7 @@
   ],
   "author": "Vivek Yanamadula <vivek@archermoney.com>",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/RudderCode/Rudder#readme",
+  "homepage": "https://github.com/RudderCode/Rudder/blob/main/docs/install.md",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/RudderCode/Rudder.git"

@@ -59,10 +59,63 @@ test('ships matching Codex and Claude plugin metadata', () => {
   assert.equal(packageManifest.version, codex.version);
   assert.equal(packageManifest.dependencies, undefined);
   assert.equal(packageManifest.workspaces, undefined);
+  assert.equal(codex.skills, './skills/');
+  assert.equal(claude.skills, './skills/');
+  assert.equal(claude.hooks, './hooks/hooks.json');
+  assert.ok(codex.interface.shortDescription.length <= 30);
+  assert.match(codex.interface.privacyPolicyURL, /^https:\/\//);
+  assert.match(codex.interface.termsOfServiceURL, /^https:\/\//);
   assert.ok(packageManifest.files.includes('.codex-plugin'));
   assert.ok(packageManifest.files.includes('.claude-plugin'));
+  assert.ok(packageManifest.files.includes('assets'));
+  assert.ok(packageManifest.files.includes('docs'));
   assert.ok(packageManifest.files.includes('hooks'));
+  assert.ok(packageManifest.files.includes('skills'));
   assert.ok(packageManifest.files.includes('dist'));
+});
+
+test('ships a public marketplace catalog and complete Rudder skill', () => {
+  const marketplace = JSON.parse(
+    readFileSync(
+      join(pluginRoot, '.claude-plugin', 'marketplace.json'),
+      'utf8'
+    )
+  );
+  const codex = JSON.parse(
+    readFileSync(join(pluginRoot, '.codex-plugin', 'plugin.json'), 'utf8')
+  );
+  const skill = readFileSync(
+    join(pluginRoot, 'skills', 'rudder', 'SKILL.md'),
+    'utf8'
+  );
+
+  assert.equal(marketplace.name, 'rudder');
+  assert.equal(marketplace.plugins.length, 1);
+  assert.equal(marketplace.plugins[0].name, 'rudder');
+  assert.equal(marketplace.plugins[0].version, codex.version);
+  assert.equal(marketplace.plugins[0].source.source, 'npm');
+  assert.equal(
+    marketplace.plugins[0].source.package,
+    '@ruddercode/rudder-plugin'
+  );
+  assert.equal(marketplace.plugins[0].source.version, codex.version);
+  assert.match(skill, /^---\nname: rudder\n/);
+  assert.match(skill, /scripts\/context\.mjs/);
+  assert.match(skill, /scripts\/manage-data\.mjs/);
+  assert.doesNotMatch(skill, /\[TODO:/);
+
+  for (const path of [
+    ['skills', 'rudder', 'scripts', 'backup-tests.mjs'],
+    ['skills', 'rudder', 'scripts', 'context.mjs'],
+    ['skills', 'rudder', 'scripts', 'manage-data.mjs'],
+    ['docs', 'install.md'],
+    ['docs', 'privacy.md'],
+    ['docs', 'support.md'],
+    ['docs', 'terms.md'],
+    ['docs', 'marketplace-submission.md'],
+  ]) {
+    assert.ok(readFileSync(join(pluginRoot, ...path), 'utf8').length > 0);
+  }
 });
 
 test('releases the root plugin package with plugin-specific artifacts', () => {
@@ -93,6 +146,7 @@ test('registers prompt submission and stop hooks from the plugin root', () => {
     assert.match(config.hooks[event][0].hooks[0].command, /PLUGIN_ROOT/);
     assert.match(config.hooks[event][0].hooks[0].command, /CLAUDE_PLUGIN_ROOT/);
     assert.match(config.hooks[event][0].hooks[0].command, /dist\/rudder-prompt-hook/);
+    assert.doesNotMatch(config.hooks[event][0].hooks[0].command, /\$\{/);
   }
 });
 

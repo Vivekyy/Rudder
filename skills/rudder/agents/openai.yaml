@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rudder"
+  short_description: "Generate tests from intent and changes"
+  default_prompt: "Use $rudder to generate and verify tests for this branch."

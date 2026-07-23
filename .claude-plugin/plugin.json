@@ -6,7 +6,7 @@
     "name": "Vivek Yanamadula",
     "email": "vivek@archermoney.com"
   },
-  "homepage": "https://github.com/RudderCode/Rudder#readme",
+  "homepage": "https://github.com/RudderCode/Rudder/blob/main/docs/install.md",
   "repository": "https://github.com/RudderCode/Rudder",
   "license": "Apache-2.0",
   "keywords": [
@@ -15,5 +15,7 @@
     "test-generation",
     "prompt-intent",
     "coverage"
-  ]
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
 }

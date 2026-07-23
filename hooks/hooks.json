@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/dist/rudder-prompt-hook.mjs\"",
+            "command": "node --input-type=module -e \"import { pathToFileURL } from 'node:url'; const root = process.env.PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT; await import(pathToFileURL(root + '/dist/rudder-prompt-hook.mjs').href)\"",
             "timeout": 10
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/dist/rudder-prompt-hook.mjs\"",
+            "command": "node --input-type=module -e \"import { pathToFileURL } from 'node:url'; const root = process.env.PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT; await import(pathToFileURL(root + '/dist/rudder-prompt-hook.mjs').href)\"",
             "timeout": 10
           }
         ]

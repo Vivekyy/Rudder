@@ -7,7 +7,7 @@
     "email": "vivek@archermoney.com",
     "url": "https://github.com/RudderCode"
   },
-  "homepage": "https://github.com/RudderCode/Rudder#readme",
+  "homepage": "https://github.com/RudderCode/Rudder/blob/main/docs/install.md",
   "repository": "https://github.com/RudderCode/Rudder",
   "license": "Apache-2.0",
   "keywords": [
@@ -17,9 +17,10 @@
     "prompt-intent",
     "coverage"
   ],
+  "skills": "./skills/",
   "interface": {
     "displayName": "Rudder",
-    "shortDescription": "Generate tests from session intent and code changes.",
+    "shortDescription": "Tests from intent and changes",
     "longDescription": "Rudder combines the intent captured in your coding session with the current worktree, then guides your existing coding agent through a fresh-slate unit-test workflow. It discovers the repository's native test and coverage tooling, generates focused tests for changed production behavior, and asks concrete follow-up questions until the configured coverage target is met.",
     "developerName": "RudderCode",
     "category": "Productivity",
@@ -27,8 +28,12 @@
       "Write"
     ],
     "websiteURL": "https://github.com/RudderCode/Rudder",
+    "privacyPolicyURL": "https://github.com/RudderCode/Rudder/blob/main/docs/privacy.md",
+    "termsOfServiceURL": "https://github.com/RudderCode/Rudder/blob/main/docs/terms.md",
     "defaultPrompt": [
       "Generate and verify unit tests for this branch's production changes."
-    ]
+    ],
+    "composerIcon": "./assets/rudder-icon.svg",
+    "logo": "./assets/rudder-banner.svg"
   }
 }
