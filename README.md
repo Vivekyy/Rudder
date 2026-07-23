@@ -8,7 +8,7 @@
   <p><strong>Turn the intent in a coding-agent session into a verified unit-test suite.</strong></p>
   <p>
     <a href="https://discord.gg/tmjdmhp4xD"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?logo=discord&logoColor=white"></a>
-    <a href="https://www.npmjs.com/package/@ruddercode/rudder-core"><img alt="npm" src="https://img.shields.io/npm/v/%40ruddercode%2Frudder-core?label=npm&color=orange&logo=npm&logoColor=white"></a>
+    <a href="https://www.npmjs.com/package/@ruddercode/rudder-plugin"><img alt="npm" src="https://img.shields.io/npm/v/%40ruddercode%2Frudder-plugin?label=npm&color=orange&logo=npm&logoColor=white"></a>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/github/license/RudderCode/Rudder?color=blue"></a>
   </p>
 </div>
