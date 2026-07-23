@@ -101,14 +101,14 @@ When you run Rudder, it:
 2. Reads the prompts associated with the current repository and branch.
 3. Directs your current coding agent to generate focused unit tests based
    on the intent inferred from your prompts.
-7. Runs the narrowest relevant tests, followed by the applicable test and
+4. Runs the narrowest relevant tests, followed by the applicable test and
    coverage commands.
-8. Asks concrete questions to fill in the gaps between your intent and the
+5. Asks concrete questions to fill in the gaps between your intent and the
    generated code.
 
 Rudder never uses `git reset --hard` or a broad `git clean`.
 It does not clear your tests without explicit confirmation, and it always
-backs up a copy of your original unit test suite.
+backs up a copy of your original unit tests before clearing them.
 
 ## What counts as intent
 
