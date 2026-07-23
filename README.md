@@ -5,7 +5,7 @@
 # Rudder 🫧
 
 <div align="center">
-  <p><strong>Turn the intent in a coding-agent session into a verified unit-test suite.</strong></p>
+  <p><strong>Turn coding-session intent into verified unit tests.</strong></p>
   <p>
     <a href="https://github.com/RudderCode/Rudder/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/RudderCode/Rudder?logo=github"></a>
     <a href="https://www.npmjs.com/package/@ruddercode/rudder-plugin"><img alt="npm downloads" src="https://img.shields.io/npm/dm/%40ruddercode%2Frudder-plugin?logo=npm"></a>
@@ -15,183 +15,181 @@
   </p>
 </div>
 
-## The idea
+Rudder is a local plugin for Claude Code and Codex that generates tests from
+two things your coding agent already has: the changes on your branch and the
+intent expressed in your coding session.
 
-A coding session contains more intent than a code diff. The user's prompts often
-explain the behavior they wanted, the edge cases they cared about, and the
-tradeoffs that never made it into comments or commit messages. Rudder uses that
-local session context to create tests for the new production code in the current
-worktree.
+A diff shows what changed.
+Your prompts explain why it changed and which edge cases and outcomes matter.
+Rudder combines both sources in a fresh-slate test workflow. 
 
-Rudder starts from a fresh test slate, runs the generated tests, measures
-coverage, and asks focused questions until the configured coverage target is
-reached.
+Rudder uses the repository's own test and coverage tools, and test generation 
+stays with the coding agent and model you already use.
+
+## Quick start
+
+### Requirements
+
+- Node.js 23.6 or newer
+- npm and Git on `PATH`
+- A current Claude Code or Codex installation with plugin support
+
+### Claude Code
+
+Add the Rudder marketplace:
+
+```text
+/plugin marketplace add RudderCode/Rudder
+```
+
+Install the plugin:
+
+```text
+/plugin install rudder@rudder
+```
+
+Restart the session before running Rudder.
+
+### Codex
+
+Add the Rudder marketplace:
+
+```text
+codex plugin marketplace add RudderCode/Rudder
+```
+
+Install the plugin:
+
+```text
+codex plugin add rudder@rudder
+```
+
+Start a new Codex session and review the bundled prompt hook when Codex asks
+you to trust it.
+
+### Run Rudder
+
+Build your feature in a Git branch as usual, then ask your agent:
+
+> Run Rudder
+
+You can also provide it an explicit coverage target:
+
+> Use $rudder to verify this branch at 90% coverage.
+
+Rudder inspects the branch and session before proposing a test reset.
+Review the exact paths if tests have already changed.
+Approve the backup and reset only when those paths are correct.
+
+## How it works
 
 ```mermaid
 flowchart LR
-    A[Current coding-agent session] --> C[Rudder skill]
-    B[Worktree changes] --> C
-    C --> D[Reset test changes]
-    D --> E[Agent generates unit tests]
-    E --> F[Run repository test and coverage tools]
-    F -->|Below target| G[Agent asks the user]
+    A[Branch changes] --> C[Rudder]
+    B[Locally captured session intent] --> C
+    C --> D[Confirm and back up test changes]
+    D --> E[Current agent generates focused tests]
+    E --> F[Repository tests and coverage]
+    F -->|Missing intent or coverage| G[Focused question]
     G --> E
-    F -->|Target reached| H[Complete]
+    F -->|Target reached| H[Verified test suite]
 ```
 
-## Proposed experience
+When you run Rudder, it:
 
-Rudder runs inside the coding-agent session where the feature was built. Before
-publishing a pull request, the user invokes the installed Rudder skill with a
-coverage target:
+1. Resolves the target branch and merge base.
+2. Reads the prompts associated with the current repository and branch.
+3. Directs your current coding agent to generate focused unit tests based
+   on the intent inferred from your prompts.
+7. Runs the narrowest relevant tests, followed by the applicable test and
+   coverage commands.
+8. Asks concrete questions to fill in the gaps between your intent and the
+   generated code.
 
-> Run the Rudder test workflow for this worktree until coverage reaches 90%.
+Rudder never uses `git reset --hard` or a broad `git clean`.
+It does not clear your tests without explicit confirmation, and it always
+backs up a copy of your original unit test suite.
 
-The exact invocation can vary between coding agents; the workflow remains the
-same. Rudder then:
+## What counts as intent
 
-1. Resolves the merge base and identifies the production code introduced in the
-   worktree.
-2. Uses the user's prompts from the current coding session to understand the
-   behavior that code is meant to implement.
-3. Generates a set of focused unit tests based on intent encoded by the user's
-   prompts.
-4. If coverage is below the target, asks concrete questions to the user in the
-   current session to clarify intent, then uses this intent to continue writing
-   unit tests until the coverage target is hit.
+Rudder requires your prompts or answers to express each test expectation.
+Existing test changes are not automatically accepted as product intent.
 
-A useful question is narrow and changes a test expectation:
+Rudder should infer answers from the code, tests, repository, or conversation.
+When a real ambiguity remains, it asks for a concrete test decision.
+For example:
 
-> When the upstream request times out, should `loadProfile` return cached data
-> or surface the timeout to its caller?
+> On timeout, should `loadProfile` return cached data or surface the error?
 
-Rudder should not ask the user for information it can infer from the repository,
-the implementation, existing test conventions, or the coding session. Each
-question should resolve an ambiguity and add new behavioral intent to the
-current session.
+Your answer becomes part of the current session and informs the next test pass.
 
-## A fresh test slate
+## Local data and privacy
 
-Rudder generates unit tests for production code introduced in the worktree. To
-make sure those tests are derived from the user's intent rather than an earlier
-test-writing attempt, Rudder reverts all testing code already added or changed in
-the worktree before generation begins.
+The prompt hook links submitted prompts to the active repository and branch.
+Records are stored in a local SQLite database:
 
-This reset includes committed, staged, unstaged, and untracked test changes
-relative to the merge base. The current agent identifies test paths from the
-repository's own structure and conventions instead of relying on a particular
-language or test framework.
+```text
+~/.rudder/rudder.db
+```
 
-Changes to existing tests are highly important for monitoring shifts in intent.
-They show where an established behavior may be changing, not just where more
-coverage is needed. Before resetting the test slate, Rudder compares each change
-with the current session's prompts:
+Set `RUDDER_HOME` to use a different state directory.
+Set `RUDDER_DISABLE_PROMPT_CAPTURE=1` to disable future capture.
 
-- If a user's prompts directly encode the intent to change a test, that change
-  becomes a requirement for the regenerated suite.
-- If the prompts do not encode that intent, Rudder flags the test change to the
-  user in the current session before continuing.
+The current plugin does not transmit captured prompts to RudderCode.
+Your coding agent may process that context when you invoke Rudder.
+Its provider terms and configuration still apply.
 
-After the reset, the current agent owns the worktree's unit-test changes for the
-duration of the workflow. Production code remains unchanged.
+You can also ask the installed skill to:
 
-## Local and BYOK
+- show the local storage path, capture status, and prompt count;
+- disable or enable future prompt capture; or
+- delete all stored prompt records after explicit confirmation.
 
-The local version of Rudder does not choose a model or make a separate model API
-call. The user's current coding agent generates the tests using the model and
-credentials the user has already configured—a bring-your-own-key approach.
+Disabling capture does not delete existing records.
+See the [privacy notice](./docs/privacy.md) for the complete data-handling description.
 
-Rudder is delivered to that agent as a skill. The skill defines how to gather
-intent from the current conversation, inspect the worktree, evaluate existing
-test changes, clear the test slate, generate unit tests, run the repository's
-native tooling, measure coverage, and ask the next question. Local helper tools
-handle deterministic worktree and session-data operations; the user's agent
-handles reasoning and generation.
+## Design principles
 
-This keeps generation and every follow-up question inside the coding session
-that produced the implementation.
-
-## How the system fits together
-
-Rudder is a skill-guided workflow backed by local context and worktree tools.
-
-| Component | Responsibility |
+| Principle | What it means |
 | --- | --- |
-| Agent skill | Give the current coding agent the complete pre-PR test-generation workflow and its rules. |
-| Session context | Supply the user's prompts and answers from the current coding session. |
-| Worktree tools | Resolve the base, identify introduced production code, classify test changes, and reset the test slate. |
-| Intent monitor | Detect changes to existing tests, ground them in directly expressed prompt intent, or flag them to the user. |
-| User's coding agent | Generate and revise unit tests using the user's existing model access. |
-| Repository tools | Run the project's own unit-test and coverage commands regardless of language or test framework. |
-| Coverage loop | Turn uncovered worktree code into focused questions and continue generation until the target is reached. |
+| Intent-driven | Prompts and answers define expected behavior; the diff defines what needs tests. |
+| Bring your own agent | Your current coding agent performs the reasoning and generation with its existing model access. |
+| Repository-native | Rudder discovers and runs the project's own test framework, commands, and coverage tooling. |
+| Fresh but recoverable | Approved test changes are backed up before Rudder starts from a clean test slate. |
+| Production-safe | The workflow is limited to tests and does not change production code, coverage configuration, or repository thresholds. |
+| Local context | Captured prompt records stay in a user-scoped SQLite database on your machine. |
 
-The existing SQLite prompt store provides normalized local session data. The
-skill and its helper tools use that store to connect the current agent session
-with the active worktree.
+## Development
 
-## MVP acceptance criteria
+Clone the repository, install dependencies, and run the validation suite:
 
-The first useful version is language- and test-framework-agnostic. It can:
+```bash
+npm ci
+npm run format:markdown:check
+npm run typecheck
+npm test
+npm run build
+```
 
-- install a Rudder skill into a supported coding agent;
-- associate the current agent session's prompts with the active worktree;
-- identify the production code introduced relative to a target branch;
-- treat a change to an existing test as intentional only when the user's prompts
-  directly encode that intent, and otherwise flag it in the current session;
-- revert all testing code introduced or changed in the worktree;
-- direct the user's current coding agent to generate focused unit tests without
-  changing production code;
-- discover and run the repository's own unit-test and coverage tooling;
-- measure coverage of the production code introduced in the worktree;
-- ask concrete questions in the current coding session whenever coverage is
-  below the configured minimum;
-- incorporate each answer into the next test-generation pass; and
-- continue until the coverage target is reached before PR publication.
+`npm test` uses Node's built-in test runner and rebuilds the bundled prompt hook
+before running the suite.
 
-## Delivery plan
+To load the repository directly in Claude Code during development:
 
-### 1. Define the skill contract
+```bash
+claude --plugin-dir .
+```
 
-Write the agent-agnostic instructions for the entire workflow: resolve the base,
-read current-session intent, review test changes, reset testing code, generate
-unit tests, run repository tooling, measure coverage, and ask the user for
-missing intent.
+See the [installation guide](./docs/install.md) for local Codex setup and the
+published-package workflow.
 
-### 2. Build deterministic local tools
+## Documentation
 
-Implement session lookup, base resolution, and diff classification for production
-and test code. Cover committed, staged, unstaged, and untracked changes,
-including modifications to tests that already exist on the base branch.
+- [Installation](./docs/install.md)
+- [Privacy](./docs/privacy.md)
+- [Support](./docs/support.md)
+- [Terms of use](./docs/terms.md)
 
-### 3. Monitor changes in test intent
+## License
 
-Compare changes to existing tests with the current session's prompts. Preserve a
-test change as a requirement only when a user prompt directly expresses that
-intent; otherwise, instruct the agent to flag it before resetting the test slate.
-
-### 4. Generate through the user's agent
-
-Have the skill clear worktree test changes, direct the current agent to generate
-the suite, and run the repository's native test and coverage tooling. Keep the
-workflow independent of any particular language, test framework, model, or
-provider.
-
-### 5. Close the coverage loop
-
-Use uncovered production code and accumulated session intent to formulate a
-focused question. Keep the answer, the next generation pass, and the coverage
-check inside the same coding-agent session, repeating until the target is
-reached.
-
-## Product decisions
-
-- **BYOK generation:** the user's current coding agent performs generation with
-  the user's existing model credentials; Rudder does not call a model directly.
-- **Skill-driven workflow:** the product ships as agent instructions plus local
-  deterministic tools rather than a generator tied to one provider.
-- **Repository agnostic:** the skill discovers and uses the repository's own
-  language, test framework, commands, and coverage tooling.
-- **Current-session UX:** every prompt, generated test, coverage result, question,
-  and answer stays in the coding session where the feature was implemented.
-- **Direct intent standard:** a change to an existing test is justified only when
-  the user's prompts directly express the intent to change it.
+Rudder is licensed under the [Apache License 2.0](./LICENSE).
