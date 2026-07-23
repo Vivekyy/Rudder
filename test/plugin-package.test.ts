@@ -9,7 +9,6 @@ import { closeDb } from '../src/db/client.ts';
 import { promptsForSession } from '../src/prompt-tagger.ts';
 
 const pluginRoot = fileURLToPath(new URL('../', import.meta.url));
-const pluginHook = join(pluginRoot, 'dist', 'rudder-prompt-hook.mjs');
 
 let root: string;
 let repo: string;
@@ -91,6 +90,7 @@ test('registers prompt submission and stop hooks from the plugin root', () => {
   for (const event of ['UserPromptSubmit', 'Stop']) {
     assert.equal(config.hooks[event].length, 1);
     assert.equal(config.hooks[event][0].hooks[0].type, 'command');
+    assert.match(config.hooks[event][0].hooks[0].command, /PLUGIN_ROOT/);
     assert.match(config.hooks[event][0].hooks[0].command, /CLAUDE_PLUGIN_ROOT/);
     assert.match(config.hooks[event][0].hooks[0].command, /dist\/rudder-prompt-hook/);
   }
@@ -105,7 +105,6 @@ test('maps plugin hosts to Rudder prompt sources without visible output', () => 
       sessionId: 'plugin-codex-session',
       environment: {
         PLUGIN_ROOT: pluginRoot,
-        CLAUDE_PLUGIN_ROOT: pluginRoot,
       },
     },
     {
@@ -118,14 +117,23 @@ test('maps plugin hosts to Rudder prompt sources without visible output', () => 
   ] as const;
 
   for (const fixture of fixtures) {
-    const stdout = execFileSync(process.execPath, [pluginHook], {
+    const config = JSON.parse(
+      readFileSync(join(pluginRoot, 'hooks', 'hooks.json'), 'utf8')
+    );
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...fixture.environment,
+      RUDDER_HOME: process.env.RUDDER_HOME,
+    };
+    delete environment.PLUGIN_ROOT;
+    delete environment.CLAUDE_PLUGIN_ROOT;
+    Object.assign(environment, fixture.environment);
+
+    const submitCommand = config.hooks.UserPromptSubmit[0].hooks[0].command;
+    const stdout = execFileSync('/bin/sh', ['-c', submitCommand], {
       cwd: repo,
       encoding: 'utf8',
-      env: {
-        ...process.env,
-        ...fixture.environment,
-        RUDDER_HOME: process.env.RUDDER_HOME,
-      },
+      env: environment,
       input: JSON.stringify({
         hook_event_name: 'UserPromptSubmit',
         session_id: fixture.sessionId,
@@ -136,14 +144,11 @@ test('maps plugin hosts to Rudder prompt sources without visible output', () => 
 
     assert.equal(stdout, '');
 
-    const stopStdout = execFileSync(process.execPath, [pluginHook], {
+    const stopCommand = config.hooks.Stop[0].hooks[0].command;
+    const stopStdout = execFileSync('/bin/sh', ['-c', stopCommand], {
       cwd: repo,
       encoding: 'utf8',
-      env: {
-        ...process.env,
-        ...fixture.environment,
-        RUDDER_HOME: process.env.RUDDER_HOME,
-      },
+      env: environment,
       input: JSON.stringify({
         hook_event_name: 'Stop',
         session_id: fixture.sessionId,
