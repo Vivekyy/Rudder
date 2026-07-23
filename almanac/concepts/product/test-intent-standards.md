@@ -6,11 +6,17 @@ sources:
   - id: readme
     type: file
     path: README.md
+  - id: skill
+    type: file
+    path: skills/rudder/SKILL.md
+  - id: backup-script
+    type: file
+    path: skills/rudder/scripts/backup-tests.mjs
 ---
 
 # Test Intent Standards
 
-Test intent standards are the proposed rules that keep Rudder's generated unit tests grounded in what the user directly intended during a coding session. They require a fresh test slate, treat changes to existing tests as intentional only when the user's prompts directly encode that intent, and use narrow questions to resolve ambiguities that affect test expectations [@readme]. These standards sit inside [Intent-Driven Test Generation](intent-driven-test-generation) and constrain the [BYOK Skill Workflow](../../decisions/product/byok-skill-workflow).
+Test intent standards are the rules that keep Rudder's generated unit tests grounded in what the user directly intended during a coding session. They require a fresh test slate, treat changes to existing tests as intentional only when the user's prompts directly encode that intent, and use narrow questions to resolve ambiguities that affect test expectations [@readme]. The installed Rudder skill operationalizes the same rules by requiring exact-path confirmation, backup creation, and production-code immutability during generation [@skill]. These standards sit inside [Intent-Driven Test Generation](intent-driven-test-generation) and constrain the [BYOK Skill Workflow](../../decisions/product/byok-skill-workflow).
 
 ## Direct Intent
 
@@ -22,7 +28,7 @@ This rule prevents regenerated tests from silently accepting behavior just becau
 
 The fresh test slate is the reset that happens before generation begins. Rudder is expected to revert all testing code introduced or changed in the worktree, including committed, staged, unstaged, and untracked test changes relative to the merge base [@readme]. The current agent identifies test paths from repository structure and conventions instead of relying on one language or test framework [@readme].
 
-The reset has a narrow scope. Production code remains unchanged, and the current agent owns the worktree's unit-test changes only for the duration of the workflow [@readme]. That makes the generated tests a product of session intent and repository behavior rather than a continuation of earlier test edits.
+The reset has a narrow scope. Production code remains unchanged, and the current agent owns the worktree's unit-test changes only for the duration of the workflow [@readme]. `backup-tests.mjs` supports that scope by requiring each affected path explicitly, rejecting paths outside the repository, writing a binary-capable tracked patch, and copying listed untracked test files into the backup [@backup-script]. That makes the generated tests a product of session intent and repository behavior rather than a continuation of earlier test edits.
 
 ## Questions And Coverage
 

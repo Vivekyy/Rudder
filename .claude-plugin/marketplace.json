@@ -1,0 +1,42 @@
+{
+  "name": "rudder",
+  "owner": {
+    "name": "RudderCode",
+    "email": "vivek@archermoney.com"
+  },
+  "metadata": {
+    "description": "Intent-driven unit-test generation for coding agents."
+  },
+  "plugins": [
+    {
+      "name": "rudder",
+      "source": {
+        "source": "npm",
+        "package": "@ruddercode/rudder-plugin",
+        "version": "0.1.0",
+        "registry": "https://registry.npmjs.org"
+      },
+      "description": "Generate focused unit tests from coding-session intent and worktree changes using your existing coding agent.",
+      "version": "0.1.0",
+      "author": {
+        "name": "RudderCode",
+        "email": "vivek@archermoney.com"
+      },
+      "homepage": "https://github.com/RudderCode/Rudder/blob/main/docs/install.md",
+      "repository": "https://github.com/RudderCode/Rudder",
+      "license": "Apache-2.0",
+      "keywords": [
+        "coding-agents",
+        "unit-tests",
+        "test-generation",
+        "prompt-intent",
+        "coverage"
+      ],
+      "category": "Productivity",
+      "tags": [
+        "testing",
+        "developer-tools"
+      ]
+    }
+  ]
+}

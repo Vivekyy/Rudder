@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { chmodSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,17 +20,35 @@ let _drizzle: RudderDb | null = null;
 
 type RudderDb = ReturnType<typeof drizzle>;
 
-const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
+function restrictLocalState(path: string, mode: number): void {
+  try {
+    chmodSync(path, mode);
+  } catch {
+    // Some Windows and network filesystems do not expose POSIX mode bits.
+  }
+}
+
+function migrationsFolder(): string {
+  return (
+    process.env.RUDDER_MIGRATIONS_PATH ??
+    fileURLToPath(new URL('../../drizzle', import.meta.url))
+  );
+}
 
 export function openDb(): DatabaseSync {
   if (_sqlite) return _sqlite;
-  mkdirSync(rudderHome(), { recursive: true });
-  const db = new DatabaseSync(dbPath());
+  const stateRoot = rudderHome();
+  const databasePath = dbPath();
+  mkdirSync(stateRoot, { recursive: true, mode: 0o700 });
+  restrictLocalState(stateRoot, 0o700);
+  const db = new DatabaseSync(databasePath);
+  restrictLocalState(databasePath, 0o600);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA busy_timeout = 5000;');
+  db.exec('PRAGMA secure_delete = ON;');
   const orm = drizzle({ client: db });
   try {
-    migrate(orm, { migrationsFolder });
+    migrate(orm, { migrationsFolder: migrationsFolder() });
   } catch (error) {
     db.close();
     throw error;

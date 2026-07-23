@@ -1,20 +1,7 @@
-name: Publish packages and releases
+name: Publish Rudder plugin
 
-# Publishes @vivekyy/rudder to npmjs.org and GitHub Packages, then creates the
-# GitHub Release, automatically on merge to main — no manual tagging step. On
-# every push to main this single job:
-#
-#   1. computes v<version> from package.json.
-#   2. publishes to npmjs.org if that tag does not exist.
-#   3. publishes to GitHub Packages if that registry is missing the version.
-#   4. pushes the v<version> tag, if needed, only after both registries are
-#      satisfied.
-#   5. creates the GitHub Release for the version if it is missing.
-#
-# npmjs.org auth uses npm Trusted Publishers (OIDC) — no NPM_TOKEN secret. This
-# is the workflow npm validates, so the Trusted Publisher at
-#   npmjs.com -> package -> Settings -> Trusted Publisher
-# must name `publish.yml`.
+# Publishes the repository-root plugin package to npmjs.org with Trusted
+# Publishing, then creates a plugin-specific Git tag and GitHub Release.
 on:
   push:
     branches:
@@ -22,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: publish-packages
+  group: publish-rudder-plugin
   cancel-in-progress: false
 
 jobs:
@@ -31,124 +18,107 @@ jobs:
     permissions:
       contents: write
       id-token: write
-      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine which registries need publishing
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Determine which plugin artifacts are missing
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version="$(node -p "require('./package.json').version")"
           name="$(node -p "require('./package.json').name")"
-          tag="v${version}"
-          if [[ "${name}" != @*/* ]]; then
-            echo "::error::GitHub Packages requires a scoped package name; got ${name}."
+          version="$(node -p "require('./package.json').version")"
+          tag="rudder-plugin-v${version}"
+
+          if [[ "${name}" != "@ruddercode/rudder-plugin" ]]; then
+            echo "::error::Expected the root package to be @ruddercode/rudder-plugin; got ${name}."
             exit 1
           fi
 
-          scope="${name%%/*}"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "name=${name}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "scope=${scope}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists — npmjs.org release already shipped."
+          if npm_view_output="$(npm view "${name}@${version}" version --registry=https://registry.npmjs.org 2>&1)"; then
+            echo "npmjs.org already has ${name}@${version}."
             npm_publish=false
-            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Tag ${tag} not found — will publish to npmjs.org and tag after success."
+          elif [[ "${npm_view_output}" == *"E404"* || "${npm_view_output}" == *"404 Not Found"* ]]; then
+            echo "npmjs.org is missing ${name}@${version}."
             npm_publish=true
-            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Could not determine whether npmjs.org has ${name}@${version}."
+            printf '%s\n' "${npm_view_output}"
+            exit 1
           fi
           echo "npm_publish=${npm_publish}" >> "$GITHUB_OUTPUT"
 
-          npmrc="${RUNNER_TEMP}/github-packages.npmrc"
-          {
-            echo "${scope}:registry=https://npm.pkg.github.com"
-            echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}"
-          } > "${npmrc}"
-
-          if github_view_output="$(NPM_CONFIG_USERCONFIG="${npmrc}" npm view "${name}@${version}" version --registry=https://npm.pkg.github.com 2>&1)"; then
-            echo "GitHub Packages already has ${name}@${version}."
-            github_publish=false
-          elif [[ "${github_view_output}" == *"E404"* || "${github_view_output}" == *"404 Not Found"* ]]; then
-            echo "GitHub Packages is missing ${name}@${version} — will publish."
-            github_publish=true
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists."
+            tag_create=false
           else
-            echo "::error::Could not determine whether GitHub Packages has ${name}@${version}."
-            printf '%s\n' "${github_view_output}"
-            exit 1
+            echo "Tag ${tag} is missing."
+            tag_create=true
           fi
-          echo "github_publish=${github_publish}" >> "$GITHUB_OUTPUT"
-
-          if [[ "${npm_publish}" == "true" || "${github_publish}" == "true" ]]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "tag_create=${tag_create}" >> "$GITHUB_OUTPUT"
 
           if release_view_output="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2>&1)"; then
             echo "GitHub Release ${tag} already exists."
-            echo "github_release=false" >> "$GITHUB_OUTPUT"
+            release_create=false
           elif [[ "${release_view_output}" == *"HTTP 404"* ]]; then
-            echo "GitHub Release ${tag} is missing — will create it after package publishing succeeds."
-            echo "github_release=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Release ${tag} is missing."
+            release_create=true
           else
             echo "::error::Could not determine whether GitHub Release ${tag} exists."
             printf '%s\n' "${release_view_output}"
             exit 1
           fi
+          echo "release_create=${release_create}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@v4
-        if: steps.check.outputs.publish == 'true'
-        with:
-          node-version: 24
+          if [[ "${npm_publish}" == "true" || "${tag_create}" == "true" || "${release_create}" == "true" ]]; then
+            echo "release_needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      # Trusted Publishers (OIDC) needs npm >= 11.5.1, newer than what the
-      # runner ships.
-      - if: steps.check.outputs.publish == 'true'
-        run: npm install -g npm@latest
+      # Trusted Publishers and provenance require npm >= 11.5.1.
+      - if: steps.check.outputs.release_needed == 'true'
+        run: npm install --global npm@latest
 
-      - if: steps.check.outputs.publish == 'true'
+      - if: steps.check.outputs.release_needed == 'true'
         run: npm ci
 
-      - uses: actions/setup-node@v4
-        if: steps.check.outputs.npm_publish == 'true'
-        with:
-          node-version: 24
-          registry-url: 'https://registry.npmjs.org'
+      - name: Validate the plugin package
+        if: steps.check.outputs.release_needed == 'true'
+        run: |
+          npm run check:agent-layout
+          npm run typecheck
+          npm test
+          npm run build
+          npm pack --dry-run
 
-      - name: Publish to npmjs.org
+      - name: Publish plugin to npmjs.org with Trusted Publishing
         if: steps.check.outputs.npm_publish == 'true'
         run: npm publish --access public --registry=https://registry.npmjs.org
 
-      - uses: actions/setup-node@v4
-        if: steps.check.outputs.github_publish == 'true'
-        with:
-          node-version: 24
-          registry-url: 'https://npm.pkg.github.com'
-          scope: ${{ steps.check.outputs.scope }}
-
-      - name: Publish to GitHub Packages
-        if: steps.check.outputs.github_publish == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm publish --registry=https://npm.pkg.github.com
-
-      - name: Tag the published release
-        if: steps.check.outputs.tag_exists == 'false'
+      - name: Tag the plugin release
+        if: steps.check.outputs.tag_create == 'true'
         run: |
           git tag "${{ steps.check.outputs.tag }}"
           git push origin "${{ steps.check.outputs.tag }}"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.github_release == 'true'
+        if: steps.check.outputs.release_create == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ steps.check.outputs.tag }}" --verify-tag --title "${{ steps.check.outputs.tag }}" --generate-notes
+        run: |
+          gh release create "${{ steps.check.outputs.tag }}" \
+            --verify-tag \
+            --title "Rudder plugin ${{ steps.check.outputs.version }}" \
+            --generate-notes

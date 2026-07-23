@@ -1,12 +1,13 @@
 ---
 name: check-changed-folders
-description: Run typecheck, tests, and build for the rudder package on the current branch versus main, verify the centralized agent-instruction layout, and verify agent attribution. Use when asked to run "/check", to validate a branch before commit/PR, or whenever a user asks to run checks before publishing.
+description: Run typecheck, tests, and builds for Rudder's core and plugin workspaces on the current branch versus main, verify the centralized agent-instruction layout, and verify agent attribution. Use when asked to run "/check", to validate a branch before commit/PR, or whenever a user asks to run checks before publishing.
 ---
 
 # Check Changed Folders
 
 Identify what changed on the branch, verify the centralized agent-instruction layout and agent attribution, run the package checks, and report pass/fail status with actionable failure output.
-Rudder is a single npm package, so the checks are repo-wide rather than per-folder.
+The root npm scripts validate the core package and the Rudder plugin workspace.
+Checks are therefore repo-wide rather than per-package.
 
 ## Workflow
 

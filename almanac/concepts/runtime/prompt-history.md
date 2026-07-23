@@ -1,17 +1,23 @@
 ---
 title: "Prompt History"
-summary: "Prompt history is README-backed product context for future test generation; the current runtime tracks session-to-branch associations but does not persist prompt text."
-topics: [concepts, product-intent, prompt-history, session-branch-tracking]
+summary: "Prompt history is Rudder's local prompt text context for intent-driven test generation, stored per agent prompt and reconciled to the active Git branch."
+topics: [concepts, product-intent, prompt-history, prompt-capture]
 sources:
-  - id: db-index
-    type: file
-    path: src/db/index.ts
   - id: schema
     type: file
     path: src/db/schema.ts
-  - id: session-tagger
+  - id: prompt-tagger
     type: file
-    path: src/session-tagger.ts
+    path: src/prompt-tagger.ts
+  - id: prompt-hook
+    type: file
+    path: src/prompt-hook.ts
+  - id: prompt-control
+    type: file
+    path: src/prompt-control.ts
+  - id: context-script
+    type: file
+    path: skills/rudder/scripts/context.mjs
   - id: readme
     type: file
     path: README.md
@@ -19,20 +25,20 @@ sources:
 
 # Prompt History
 
-Prompt history is the README-backed product input that would let Rudder generate tests from user intent expressed during a coding-agent session. The proposed workflow says prompts and follow-up answers explain expected behavior, edge cases, and tradeoffs that may not appear in code diffs [@readme]. The current runtime does not persist prompt text; it stores [session branch tracking](session-branch-tracking) rows that associate a session ID with a normalized repository branch [@schema] [@session-tagger].
+Prompt history is Rudder's local record of prompt text that can explain user intent for generated tests. The README says coding-session prompts and follow-up answers can name expected behavior, edge cases, and tradeoffs that never appear in code diffs [@readme]. The implemented runtime now stores submitted prompt text in `prompt_branches`, associates each prompt with source/session/prompt IDs, repository, branch, and timestamps, and exposes lookup helpers for session and branch context [@schema] [@prompt-tagger].
 
 ## Product Meaning
 
 The README describes Rudder as running inside the same coding-agent session where the feature was built, using that session context plus worktree changes to create tests for new production code [@readme]. In that product model, prompt history is behavioral evidence: it carries the user's stated expectations and the answers to later clarification questions [@readme].
 
-This concept should therefore be read as product intent, not as an implemented prompt database. [Intent-Driven Test Generation](../product/intent-driven-test-generation) and [Test Intent Standards](../product/test-intent-standards) define how prompt history is expected to matter once the workflow can gather it.
+The current implementation gives the [Rudder Skill Runtime](../../architecture/runtime/rudder-skill-runtime) local prompt context for that model. The skill still asks the host coding agent to reason about behavior, inspect tests, generate new tests, and interpret coverage; prompt history is evidence for those steps, not an automatic test oracle [@context-script].
 
-## Current Runtime Boundary
+## Capture Model
 
-The implemented database schema currently exports `sessionBranches`, not a prompt table [@schema]. The database index module re-exports only the client helpers and schema metadata, while the package root also exports the session tagger APIs [@db-index] [@session-tagger]. The concrete implemented capability is to record and query which sessions were observed on which repository branches, not to read back prompt text by day or source [@session-tagger].
+Prompt capture starts from coding-agent hooks. `recordPromptHookEvent()` normalizes Claude Code, Codex, and Cursor payloads, records prompt text on submit events, and reconciles the prompt to the active branch on stop events [@prompt-hook]. `recordPromptBranch()` writes the submitted prompt with the branch active before the turn runs, while `reconcilePromptBranch()` updates the row to the branch active after the turn and sets `reconciled_at` [@prompt-tagger].
 
-The distinction matters for future product work. Code that needs the current implemented session context should use [Session Branch Store](../../architecture/runtime/session-branch-store), [Session Branches Schema](../../reference/database/session-branches-schema), and [Use Session Branch Tracking](../../guides/runtime/use-session-branch-tracking). Code that needs prompt text capture still needs a new implementation and should not assume an insert or day-query helper already exists.
+Prompt capture can be disabled before a write. `promptCaptureDisabled()` returns true when `RUDDER_DISABLE_PROMPT_CAPTURE` is exactly `1` or when the `prompt-capture-disabled` marker exists under the Rudder home directory [@prompt-control].
 
 ## Working Implication
 
-When updating the product workflow, keep implemented session association separate from future prompt history capture. Session branch tracking can answer "which branch was this session on?" [@session-tagger]. The proposed prompt-history capability must answer "what intent did the user express in that session?" [@readme]. Those are related inputs to the README workflow, but only the branch association is implemented in the current code.
+When updating the product workflow, treat prompt history as local and branch-scoped. `skills/rudder/scripts/context.mjs` reads prompts for the resolved repository and branch from `prompt_branches` and returns them beside the branch diff, so the skill can combine implementation changes with user-stated intent [@context-script]. Use [Prompt Branch Store](../../architecture/runtime/prompt-branch-store), [Prompt Branches Schema](../../reference/database/prompt-branches-schema), and [Use Prompt Capture](../../guides/runtime/use-prompt-capture) for current implementation work.
