@@ -110,7 +110,6 @@ test('ships a public marketplace catalog and complete Rudder skill', () => {
     ['skills', 'rudder', 'scripts', 'manage-data.mjs'],
     ['docs', 'install.md'],
     ['docs', 'privacy.md'],
-    ['docs', 'releasing.md'],
     ['docs', 'support.md'],
     ['docs', 'terms.md'],
     ['docs', 'marketplace-submission.md'],
@@ -138,6 +137,10 @@ test('releases the root plugin package with plugin-specific artifacts', () => {
   assert.match(publishWorkflow, /manual_bootstrap_required/);
   assert.match(publishWorkflow, /Trusted Publishing/);
   assert.match(releaseAlert, /Manual npm bootstrap required/);
+  assert.doesNotMatch(
+    `${publishWorkflow}\n${releaseAlert}`,
+    /docs\/releasing\.md/
+  );
 });
 
 test('registers prompt submission and stop hooks from the plugin root', () => {

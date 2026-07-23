@@ -127,8 +127,7 @@ jobs:
             const releaseLines = [
               ...(manual_bootstrap_required === 'true'
                 ? [
-                    `Manually publish **\`${name}@${version}\`** to npmjs.org.`,
-                    'Configure `publish.yml` as the package Trusted Publisher, then rerun the workflow.',
+                    `**\`${name}@${version}\`** requires a manual first publication.`,
                   ]
                 : npm_publish === 'true'
                   ? [`Publish **\`${name}@${version}\`** through npm Trusted Publishing.`]
@@ -150,7 +149,7 @@ jobs:
                   ...releaseLines,
                   '',
                   manual_bootstrap_required === 'true'
-                    ? 'GitHub Actions will not receive an npm write token or create the tag and GitHub Release until the manual publication is complete. Follow `docs/releasing.md`.'
+                    ? 'GitHub Actions will not receive an npm write token or create the tag and GitHub Release until the manual publication is complete.'
                     : 'The release runs through `.github/workflows/publish.yml` after merge.',
                 ].join('\n')
               : [

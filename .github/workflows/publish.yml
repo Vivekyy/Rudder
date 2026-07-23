@@ -113,12 +113,11 @@ jobs:
       - name: Report required manual bootstrap publication
         if: steps.check.outputs.manual_bootstrap_required == 'true'
         run: |
-          echo "::warning::@ruddercode/rudder-plugin does not exist on npmjs.org. Publish the first version manually, configure publish.yml as its npm Trusted Publisher, and rerun this workflow."
+          echo "::warning::@ruddercode/rudder-plugin does not exist on npmjs.org. Manual bootstrap publication is required before release automation can continue."
           {
             echo "## Manual npm bootstrap required"
             echo
             echo "GitHub Actions will not receive an npm write token or create release artifacts yet."
-            echo "Follow \`docs/releasing.md\`, then rerun this workflow after the package exists."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Trusted Publishers and provenance require npm >= 11.5.1.
