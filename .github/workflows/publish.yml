@@ -94,8 +94,31 @@ jobs:
       - if: steps.check.outputs.release_needed == 'true'
         run: npm ci
 
+      - name: Configure release telemetry
+        if: steps.check.outputs.release_needed == 'true'
+        env:
+          POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+
+          const token = process.env.POSTHOG_PROJECT_TOKEN?.trim() || '';
+          const host =
+            process.env.POSTHOG_HOST?.trim() || 'https://us.i.posthog.com';
+          const source = [
+            '/** Generated in the release workspace by publish.yml. */',
+            `export const BUILT_IN_POSTHOG_PROJECT_TOKEN = ${JSON.stringify(token)};`,
+            `export const BUILT_IN_POSTHOG_HOST = ${JSON.stringify(host)};`,
+            '',
+          ].join('\n');
+          writeFileSync('src/telemetry-build-config.ts', source);
+          NODE
+
       - name: Validate the plugin package
         if: steps.check.outputs.release_needed == 'true'
+        env:
+          DO_NOT_TRACK: '1'
         run: |
           npm run check:agent-layout
           npm run typecheck
@@ -105,6 +128,8 @@ jobs:
 
       - name: Publish plugin to npmjs.org with Trusted Publishing
         if: steps.check.outputs.npm_publish == 'true'
+        env:
+          DO_NOT_TRACK: '1'
         run: npm publish --access public --registry=https://registry.npmjs.org
 
       - name: Tag the plugin release

@@ -3,9 +3,18 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { PostHog } from 'posthog-node';
 import { rudderHome } from './db/index.ts';
+import {
+  BUILT_IN_POSTHOG_HOST,
+  BUILT_IN_POSTHOG_PROJECT_TOKEN,
+} from './telemetry-build-config.ts';
 
-const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || '';
-const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
+const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
+const POSTHOG_PROJECT_TOKEN =
+  process.env.POSTHOG_PROJECT_TOKEN ||
+  process.env.POSTHOG_API_KEY ||
+  BUILT_IN_POSTHOG_PROJECT_TOKEN;
+const POSTHOG_HOST =
+  process.env.POSTHOG_HOST || BUILT_IN_POSTHOG_HOST || DEFAULT_POSTHOG_HOST;
 
 export function telemetryDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.DO_NOT_TRACK === '1';
@@ -36,14 +45,14 @@ let _client: PostHog | null = null;
 let _distinctId: string | null = null;
 
 function client(): PostHog | null {
-  if (!POSTHOG_API_KEY || telemetryDisabled()) return null;
+  if (!POSTHOG_PROJECT_TOKEN || telemetryDisabled()) return null;
   if (!_client) {
-    _client = new PostHog(POSTHOG_API_KEY, {
+    _client = new PostHog(POSTHOG_PROJECT_TOKEN, {
       host: POSTHOG_HOST,
-      // CLI invocations are short-lived; send immediately so events aren't lost.
       flushAt: 1,
       flushInterval: 0,
       enableExceptionAutocapture: true,
+      isServer: false,
     });
   }
   return _client;

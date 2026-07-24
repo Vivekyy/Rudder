@@ -3,6 +3,7 @@
 import { join } from 'node:path';
 import { closeDb } from '../src/db/client.ts';
 import { parseAgentPromptSource, recordPromptHookEvent } from '../src/prompt-hook.ts';
+import { captureException, shutdown } from '../src/telemetry.ts';
 
 type AgentSource = 'claude-code' | 'codex' | 'cursor';
 
@@ -42,8 +43,22 @@ try {
   const input = await readStdin();
   const payload: unknown = JSON.parse(input);
   recordPromptHookEvent(context.source, payload);
-} catch {
+} catch (error) {
   // Prompt capture is optional metadata. A hook failure must not interrupt the host agent.
+  try {
+    captureException(error, { component: 'prompt-hook' });
+  } catch {
+    // Telemetry is best-effort and must not change hook behavior.
+  }
 } finally {
-  closeDb();
+  try {
+    closeDb();
+  } catch {
+    // Database teardown must not interrupt the host agent.
+  }
+  try {
+    await shutdown();
+  } catch {
+    // Telemetry teardown is best-effort and must remain silent.
+  }
 }
