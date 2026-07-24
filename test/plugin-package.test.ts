@@ -57,6 +57,7 @@ test('ships matching Codex and Claude plugin metadata', () => {
   assert.equal(codex.description, claude.description);
   assert.equal(packageManifest.name, '@ruddercode/rudder-plugin');
   assert.equal(packageManifest.version, codex.version);
+  assert.equal(packageManifest.engines.node, '>=24.0.0');
   assert.equal(packageManifest.dependencies, undefined);
   assert.equal(packageManifest.workspaces, undefined);
   assert.equal(codex.skills, './skills/');

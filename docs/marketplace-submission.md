@@ -58,6 +58,7 @@ Generate and verify unit tests for this branch's production changes.
 ## Availability and release notes
 
 Initial availability follows the selected coding agent and npm registry.
-Rudder 0.1.0 introduces Codex and Claude plugin manifests.
-It adds local prompt capture, branch reconciliation, and the Rudder skill.
+Rudder 0.1.1 packages Codex and Claude plugin manifests.
+It adds local prompt and previous-agent-output capture.
+It adds branch reconciliation and the Rudder skill.
 It adds local data controls and npm-backed marketplace distribution.
