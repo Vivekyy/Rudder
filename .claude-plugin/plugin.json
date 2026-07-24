@@ -1,6 +1,6 @@
 {
   "name": "rudder",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Generate focused unit tests from coding-session intent and worktree changes using your existing coding agent.",
   "author": {
     "name": "Vivek Yanamadula",
